@@ -65,3 +65,7 @@
 1. 在导入界面，我希望支持用户选择自定义的 Skill 路径，你需要递归进去查找到里面的所有 Skill 文件夹，也有可能用户选择的路径就是单个 Skill 文件夹。
 2. 你需要支持从 GitHub 导入 Skill：
    - 用户会输入一个 GitHub 仓库链接，你需要获取到这个仓库中的所有“工作区路径”中的 Skill 文件夹，并将其导入，你可以使用类似的 API：`https://api.github.com/repos/{username}/{repo_name}/contents/{folder_path}?ref={branch}`。
+
+# 补充说明 2
+
+- 持久化
