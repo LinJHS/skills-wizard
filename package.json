@@ -1,0 +1,75 @@
+{
+  "name": "skills-wizard",
+  "displayName": "Skills Wizard",
+  "description": "Import, Export and Manage Skills for Coding Assistants",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.108.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+      "onView:skillsWizard.sidebarView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "skills-wizard-view-container",
+          "title": "Skills Wizard",
+          "icon": "resources/wand.svg"
+        }
+      ]
+    },
+    "views": {
+      "skills-wizard-view-container": [
+        {
+          "type": "webview",
+          "id": "skillsWizard.sidebarView",
+          "name": "Skills Wizard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "skills-wizard.refresh",
+        "title": "Refresh Skills",
+        "icon": "$(refresh)"
+      }
+    ],
+    "configuration": {
+      "title": "Skills Wizard",
+      "properties": {
+        "skillsWizard.defaultExportPath": {
+          "type": "string",
+          "default": ".claude/skills/",
+          "description": "Default path to export skills to in the workspace."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "fs-extra": "^11.3.3"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.108.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/fs-extra": "^11.0.4",
+    "typescript-eslint": "^8.52.0",
+    "eslint": "^9.39.2",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
