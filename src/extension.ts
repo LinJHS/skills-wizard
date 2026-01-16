@@ -7,19 +7,25 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const skillManager = new SkillManager(context);
 	
-	const sidebarProvider = new SkillWebviewProvider(context.extensionUri, skillManager);
+	const importProvider = new SkillWebviewProvider(context.extensionUri, skillManager, SkillWebviewProvider.viewTypeImport);
+	const mySkillsProvider = new SkillWebviewProvider(context.extensionUri, skillManager, SkillWebviewProvider.viewTypeMySkills);
+	const presetsProvider = new SkillWebviewProvider(context.extensionUri, skillManager, SkillWebviewProvider.viewTypePresets);
+	const settingsProvider = new SkillWebviewProvider(context.extensionUri, skillManager, SkillWebviewProvider.viewTypeSettings);
 	
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			SkillWebviewProvider.viewType,
-			sidebarProvider
-		)
+		vscode.window.registerWebviewViewProvider(SkillWebviewProvider.viewTypeImport, importProvider),
+		vscode.window.registerWebviewViewProvider(SkillWebviewProvider.viewTypeMySkills, mySkillsProvider),
+		vscode.window.registerWebviewViewProvider(SkillWebviewProvider.viewTypePresets, presetsProvider),
+		vscode.window.registerWebviewViewProvider(SkillWebviewProvider.viewTypeSettings, settingsProvider)
 	);
 
-    // Register a command to refresh the view manually if needed
+    // Register a command to refresh all views manually
 	context.subscriptions.push(
 		vscode.commands.registerCommand('skills-wizard.refresh', () => {
-			sidebarProvider.refresh();
+			importProvider.refresh();
+			mySkillsProvider.refresh();
+			presetsProvider.refresh();
+			settingsProvider.refresh();
 		})
 	);
 }

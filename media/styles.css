@@ -1,0 +1,128 @@
+body {
+  padding: 12px;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+}
+
+.nav vscode-radio {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+
+.content {
+  min-width: 0;
+}
+
+.view.hidden {
+  display: none;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.skill-item {
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-title {
+  font-weight: 600;
+}
+
+.skill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.empty {
+  padding: 8px 0;
+}
+
+.skill-item.selected,
+.preset-item.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.editable {
+  cursor: pointer;
+}
+
+.editable:hover {
+  opacity: 0.8;
+}
+
+.preset-item {
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.skill-card-mini {
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--vscode-editor-background);
+}
+
+.skill-title-small {
+  font-weight: 500;
+  font-size: 0.95em;
+}
+
+.action-bar,
+.preset-actions {
+  display: none;
+}
+
+.skill-item.selected .action-bar,
+.preset-item.selected .preset-actions {
+  display: flex !important;
+}
+

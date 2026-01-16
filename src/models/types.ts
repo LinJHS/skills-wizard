@@ -32,6 +32,7 @@ export interface DiscoveredSkill {
   name: string;
   path: string;
   md5: string;
+  description?: string;
   sourceLocation: string; // e.g. "~/.claude/skills/"
   isRemote?: boolean; // true if from GitHub
   remoteUrl?: string; // GitHub API URL for the directory

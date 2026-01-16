@@ -10,7 +10,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:skillsWizard.sidebarView"
+    "onView:skillsWizard.importView",
+    "onView:skillsWizard.mySkillsView",
+    "onView:skillsWizard.presetsView",
+    "onView:skillsWizard.settingsView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -19,7 +22,7 @@
         {
           "id": "skills-wizard-view-container",
           "title": "Skills Wizard",
-          "icon": "resources/wand.svg"
+          "icon": "resources/wand.png"
         }
       ]
     },
@@ -27,8 +30,23 @@
       "skills-wizard-view-container": [
         {
           "type": "webview",
-          "id": "skillsWizard.sidebarView",
-          "name": "Skills Wizard"
+          "id": "skillsWizard.importView",
+          "name": "Import Skills"
+        },
+        {
+          "type": "webview",
+          "id": "skillsWizard.mySkillsView",
+          "name": "My Skills"
+        },
+        {
+          "type": "webview",
+          "id": "skillsWizard.presetsView",
+          "name": "Presets"
+        },
+        {
+          "type": "webview",
+          "id": "skillsWizard.settingsView",
+          "name": "Settings"
         }
       ]
     },
@@ -42,6 +60,11 @@
     "configuration": {
       "title": "Skills Wizard",
       "properties": {
+        "skillsWizard.storagePath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom storage path for Skills Wizard data (skills/, config.json). Leave empty to use the default profile-level path."
+        },
         "skillsWizard.defaultExportPath": {
           "type": "string",
           "default": ".claude/skills/",
@@ -59,16 +82,15 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@vscode/webview-ui-toolkit": "^1.4.0",
     "fs-extra": "^11.3.3"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "@types/vscode": "^1.108.1",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.7.1",
+    "@types/fs-extra": "^11.0.4",
+    "typescript-eslint": "^8.52.0",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0"
