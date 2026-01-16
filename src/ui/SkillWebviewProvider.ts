@@ -30,8 +30,40 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
         case 'refresh':
             await this.refresh();
             break;
+        case 'scanCustomPath':
+            const uris = await vscode.window.showOpenDialog({ 
+                canSelectFiles: false, 
+                canSelectFolders: true, 
+                canSelectMany: false,
+                openLabel: 'Scan for Skills'
+            });
+            if (uris && uris[0]) {
+                await this._skillManager.scanCustomPath(uris[0].fsPath);
+                await this.refresh();
+            }
+            break;
+        case 'scanGitHub':
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Scanning GitHub Repository...",
+                    cancellable: false
+                }, async () => {
+                    await this._skillManager.scanGitHub(data.url);
+                });
+                await this.refresh();
+            } catch (e: any) {
+                vscode.window.showErrorMessage("GitHub Scan Failed: " + e.message);
+            }
+            break;
         case 'importSkill':
-            await this._skillManager.importSkill(data.skill);
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Importing Skill...",
+                cancellable: false
+            }, async () => {
+                await this._skillManager.importSkill(data.skill);
+            });
             await this.refresh();
             break;
         case 'deleteSkill':
@@ -126,6 +158,15 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
     </style>
 </head>
 <body>
+    <div class="section">
+        <h3>Scan External Skills</h3>
+        <button onclick="scanCustomPath()">Scan Local Folder...</button>
+        <div style="margin-top: 5px; display: flex; gap: 5px;">
+            <input type="text" id="github-url" placeholder="https://github.com/owner/repo" style="flex:1">
+            <button onclick="scanGitHub()">Scan GitHub</button>
+        </div>
+    </div>
+
     <div class="section" id="import-section">
         <h3>Import Skills</h3>
         <div id="discovered-list"></div>
@@ -177,21 +218,22 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             const container = document.getElementById('discovered-list');
             container.innerHTML = '';
             
-            // Filter out already imported ones logic could be here, or visually indicate
-            // For now, list all discovered
-            
             state.discovered.forEach(skill => {
                 const isImported = state.imported.some(s => s.md5 === skill.md5);
                 const el = document.createElement('div');
                 el.className = 'item';
+                
+                const source = skill.isRemote ? \`GitHub (\${skill.sourceLocation})\` : skill.sourceLocation;
+
                 el.innerHTML = \`
                     <div class="item-header">
                         <strong>\${skill.name}</strong>
                         \${isImported ? '<span class="tag">Imported</span>' : ''}
+                        \${skill.isRemote ? '<span class="tag" style="background: var(--vscode-charts-blue); color: white;">Remote</span>' : ''}
                     </div>
-                    <div class="item-details">Source: \${skill.sourceLocation}</div>
+                    <div class="item-details" style="font-size:0.9em; color: var(--vscode-descriptionForeground); overflow-wrap: break-word;">Source: \${source}</div>
                     <div class="item-actions">
-                        \${!isImported ? \`<button onclick="importSkill('\${skill.path.replace(/\\\\/g, '/')}', '\${skill.name}', '\${skill.md5}', '\${skill.sourceLocation.replace(/\\\\/g, '/')}')">Import</button>\` : \`<button class="secondary" onclick="importSkill('\${skill.path.replace(/\\\\/g, '/')}', '\${skill.name}', '\${skill.md5}', '\${skill.sourceLocation.replace(/\\\\/g, '/')}')">Re-Import/Overwrite</button>\`}
+                        \${!isImported ? \`<button onclick="importSkill('\${skill.md5}')">Import</button>\` : \`<button class="secondary" onclick="importSkill('\${skill.md5}')">Re-Import/Overwrite</button>\`}
                     </div>
                 \`;
                 container.appendChild(el);
@@ -205,7 +247,6 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             state.imported.forEach(skill => {
                 const el = document.createElement('div');
                 el.className = 'item';
-                // Tag editing is simple prompt for now
                 const tagsHtml = skill.tags.map(t => \`<span class="tag">\${t}</span>\`).join('');
                 el.innerHTML = \`
                     <div class="item-header">
@@ -231,8 +272,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                  el.className = 'item';
                  const skillCount = preset.skillIds.length;
                  
-                 // Create skill selection checkboxes
-                 let skillsSelection = '<div style="margin: 5px 0; max-height: 100px; overflow-y: auto; border: 1px solid #333; padding: 5px;">';
+                 let skillsSelection = '<div style="margin: 5px 0; max-height: 100px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); padding: 5px;">';
                  state.imported.forEach(s => {
                      const checked = preset.skillIds.includes(s.id) ? 'checked' : '';
                      skillsSelection += \`<div><input type="checkbox" onchange="togglePresetSkill('\${preset.id}', '\${s.id}', this.checked)" \${checked}> \${s.name}</div>\`;
@@ -255,8 +295,18 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         // Actions
-        window.importSkill = (path, name, md5, sourceLocation) => {
-            vscode.postMessage({ type: 'importSkill', skill: { path, name, md5, sourceLocation } });
+        window.scanCustomPath = () => { vscode.postMessage({ type: 'scanCustomPath' }); };
+        
+        window.scanGitHub = () => { 
+            const url = document.getElementById('github-url').value;
+            if(url) vscode.postMessage({ type: 'scanGitHub', url }); 
+        };
+
+        window.importSkill = (md5) => {
+            const skill = state.discovered.find(s => s.md5 === md5);
+            if (skill) {
+                vscode.postMessage({ type: 'importSkill', skill });
+            }
         };
         
         window.deleteSkill = (id) => {
@@ -311,9 +361,6 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
              const val = document.getElementById('setting-export-path').value;
              vscode.postMessage({ type: 'updateSettings', defaultExportPath: val });
         };
-
-        // Init
-        // vscode.postMessage({ type: 'refresh' });
     </script>
 </body>
 </html>`;
