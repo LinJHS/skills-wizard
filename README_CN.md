@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="resources/wand.svg" width="128" height="128" alt="Skills Wizard Logo">
+<img src="resources/wand.png" width="128" height="128" alt="Skills Wizard Logo">
 
 # Skills Wizard
 

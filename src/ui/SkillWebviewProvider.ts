@@ -1,15 +1,32 @@
 import * as vscode from 'vscode';
 import { SkillManager } from '../managers/SkillManager';
-import { DiscoveredSkill, Preset, Skill } from '../models/types';
+import { Preset } from '../models/types';
+
+function getNonce() {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
 
 export class SkillWebviewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'skillsWizard.sidebarView';
+  public static readonly viewTypeImport = 'skillsWizard.importView';
+  public static readonly viewTypeMySkills = 'skillsWizard.mySkillsView';
+  public static readonly viewTypePresets = 'skillsWizard.presetsView';
+  public static readonly viewTypeSettings = 'skillsWizard.settingsView';
+
   private _view?: vscode.WebviewView;
+  private readonly _viewType: string;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private readonly _skillManager: SkillManager
-  ) {}
+    private readonly _skillManager: SkillManager,
+    viewType: string
+  ) {
+    this._viewType = viewType;
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -20,10 +37,14 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this._extensionUri],
+      localResourceRoots: [
+        this._extensionUri,
+        vscode.Uri.joinPath(this._extensionUri, 'media'),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules'),
+      ],
     };
 
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview, this._viewType);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
@@ -49,7 +70,15 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                     title: "Scanning GitHub Repository...",
                     cancellable: false
                 }, async () => {
-                    await this._skillManager.scanGitHub(data.url);
+                    const result = await this._skillManager.scanGitHub(data.url);
+                    if (result.total === 0) {
+                      vscode.window.showWarningMessage(
+                        'No skills found in this repo. Tip: this extension scans common skill folders (e.g. `.claude/skills/` and `skills/`). ' +
+                        'If your repo stores skills in another subfolder, try a URL like: https://github.com/<owner>/<repo>/tree/<branch>/<path>.'
+                      );
+                    } else if (result.added === 0) {
+                      vscode.window.showInformationMessage('No new skills discovered (they may already be imported or discovered).');
+                    }
                 });
                 await this.refresh();
             } catch (e: any) {
@@ -62,39 +91,100 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                 title: "Importing Skill...",
                 cancellable: false
             }, async () => {
-                await this._skillManager.importSkill(data.skill);
+                const importedId = await this._skillManager.importSkill(data.skill);
+                if (Array.isArray(data.tags)) {
+                  await this._skillManager.updateSkillMetadata(importedId, { tags: data.tags });
+                }
             });
             await this.refresh();
             break;
-        case 'deleteSkill':
+        case 'requestDeleteSkill': {
+            const res = await vscode.window.showWarningMessage(
+              'Delete this skill?',
+              { modal: true },
+              'Delete'
+            );
+            if (res === 'Delete') {
+              await this._skillManager.deleteSkill(data.id);
+              await this.refresh();
+            }
+            break;
+        }
+        case 'deleteSkill': // For bulk delete
             await this._skillManager.deleteSkill(data.id);
             await this.refresh();
             break;
+        case 'requestEditSkillTags': {
+            // This is now mainly a fallback or invoked by logic, 
+            // but for inline edit the JS might send direct updateSkillMetadata
+            const current = typeof data.current === 'string' ? data.current : '';
+            const input = await vscode.window.showInputBox({
+              title: 'Edit tags',
+              prompt: 'Comma-separated tags',
+              value: current
+            });
+            if (input !== undefined) {
+              const tags = input.split(',').map((t: string) => t.trim()).filter(Boolean);
+              await this._skillManager.updateSkillMetadata(data.id, { tags });
+              await this.refresh();
+            }
+            break;
+        }
+        case 'requestEditSkillDescription': {
+            // Fallback for non-inline edit environments
+            const current = typeof data.current === 'string' ? data.current : '';
+            const input = await vscode.window.showInputBox({
+              title: 'Edit description',
+              prompt: 'Skill description (stored in Skills Wizard config)',
+              value: current
+            });
+            if (input !== undefined) {
+              await this._skillManager.updateSkillMetadata(data.id, { customDescription: input });
+              await this.refresh();
+            }
+            break;
+        }
         case 'addToWorkspace':
             try {
                 await this._skillManager.exportSkillToWorkspace(data.id);
-                vscode.window.showInformationMessage('Skill added to workspace');
+                vscode.window.showInformationMessage('Skill added');
             } catch (e: any) {
                 vscode.window.showErrorMessage('Failed to add skill: ' + e.message);
             }
             break;
         case 'createPreset':
-             const newPreset: Preset = {
-                 id: Date.now().toString(),
-                 name: data.name,
-                 skillIds: []
-             };
-             await this._skillManager.savePreset(newPreset);
-             await this.refresh();
+             try {
+               const newPreset: Preset = {
+                   id: Date.now().toString(),
+                   name: data.name,
+                   skillIds: []
+               };
+               await this._skillManager.savePreset(newPreset);
+               await this.refresh();
+             } catch (e: any) {
+               vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
+             }
              break;
         case 'updatePreset':
-            await this._skillManager.savePreset(data.preset);
-            await this.refresh();
+            try {
+              await this._skillManager.savePreset(data.preset);
+              await this.refresh();
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to update preset');
+            }
             break;
-        case 'deletePreset':
-            await this._skillManager.deletePreset(data.id);
-            await this.refresh();
+        case 'requestDeletePreset': {
+            const res = await vscode.window.showWarningMessage(
+              'Delete this preset?',
+              { modal: true },
+              'Delete'
+            );
+            if (res === 'Delete') {
+              await this._skillManager.deletePreset(data.id);
+              await this.refresh();
+            }
             break;
+        }
         case 'applyPreset':
             try {
                 await this._skillManager.applyPreset(data.id, data.mode);
@@ -104,13 +194,16 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             }
             break;
         case 'updateSettings':
-            if (data.defaultExportPath) {
-                this._skillManager.updateDefaultExportPath(data.defaultExportPath);
-                await this.refresh();
+            if (typeof data.defaultExportPath === 'string') {
+              this._skillManager.updateDefaultExportPath(data.defaultExportPath);
             }
+            if (typeof data.storagePath === 'string') {
+              this._skillManager.updateStoragePath(data.storagePath);
+            }
+            await this.refresh();
             break;
         case 'updateSkillMetadata':
-            await this._skillManager.updateSkillMetadata(data.id, { tags: data.tags, customName: data.customName });
+            await this._skillManager.updateSkillMetadata(data.id, { tags: data.tags, customDescription: data.customDescription });
             await this.refresh();
             break;
       }
@@ -121,247 +214,45 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
   }
   
   public async refresh() {
-      if (!this._view) return;
+      if (!this._view) {
+        return;
+      }
       const { discovered, imported } = await this._skillManager.scanForSkills();
       const presets = this._skillManager.getPresets();
       const defaultExportPath = vscode.workspace.getConfiguration('skillsWizard').get('defaultExportPath') || '.claude/skills/';
+      const storagePath = await this._skillManager.getEffectiveStoragePath();
       
       this._view.webview.postMessage({
           type: 'state',
           discovered,
           imported,
           presets,
-          defaultExportPath
+          defaultExportPath,
+          storagePath
       });
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview) {
+  private _getHtmlForWebview(webview: vscode.Webview, viewType: string) {
+    const nonce = getNonce();
+    const toolkitUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'webview-ui-toolkit', 'dist', 'toolkit.min.js')
+    );
+    const mainUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
+    const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css'));
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skills Wizard</title>
-    <style>
-        body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-foreground); background-color: var(--vscode-editor-background); }
-        h2, h3 { margin-bottom: 10px; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 5px; }
-        .section { margin-bottom: 20px; }
-        .item { padding: 5px; border: 1px solid var(--vscode-panel-border); margin-bottom: 5px; display: flex; flex-direction: column; }
-        .item-header { display: flex; justify-content: space-between; align-items: center; }
-        .item-actions { display: flex; gap: 5px; margin-top: 5px; }
-        button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 8px; cursor: pointer; }
-        button:hover { background: var(--vscode-button-hoverBackground); }
-        button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-        input { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 4px; }
-        .tag { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 2px 5px; border-radius: 3px; font-size: 0.8em; margin-right: 5px; }
-        .hidden { display: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
+  <link href="${stylesUri}" rel="stylesheet" />
+  <title>Skills Wizard</title>
 </head>
-<body>
-    <div class="section">
-        <h3>Scan External Skills</h3>
-        <button onclick="scanCustomPath()">Scan Local Folder...</button>
-        <div style="margin-top: 5px; display: flex; gap: 5px;">
-            <input type="text" id="github-url" placeholder="https://github.com/owner/repo" style="flex:1">
-            <button onclick="scanGitHub()">Scan GitHub</button>
-        </div>
-    </div>
-
-    <div class="section" id="import-section">
-        <h3>Import Skills</h3>
-        <div id="discovered-list"></div>
-    </div>
-    
-    <div class="section" id="skills-section">
-        <h3>My Skills</h3>
-        <div id="imported-list"></div>
-    </div>
-    
-    <div class="section" id="presets-section">
-        <h3>Presets</h3>
-        <div class="item">
-            <input type="text" id="new-preset-name" placeholder="New Preset Name" />
-            <button id="btn-create-preset">Create Preset</button>
-        </div>
-        <div id="presets-list"></div>
-    </div>
-    
-    <div class="section" id="settings-section">
-        <h3>Settings</h3>
-        <label>Default Export Path:</label>
-        <input type="text" id="setting-export-path" value=".claude/skills/" />
-        <button id="btn-save-settings">Save</button>
-    </div>
-
-    <script>
-        const vscode = acquireVsCodeApi();
-        let state = { discovered: [], imported: [], presets: [] };
-
-        window.addEventListener('message', event => {
-            const message = event.data;
-            if (message.type === 'state') {
-                state = message;
-                if (document.getElementById('setting-export-path')) {
-                     document.getElementById('setting-export-path').value = state.defaultExportPath || '.claude/skills/';
-                }
-                render();
-            }
-        });
-
-        function render() {
-            renderDiscovered();
-            renderImported();
-            renderPresets();
-        }
-
-        function renderDiscovered() {
-            const container = document.getElementById('discovered-list');
-            container.innerHTML = '';
-            
-            state.discovered.forEach(skill => {
-                const isImported = state.imported.some(s => s.md5 === skill.md5);
-                const el = document.createElement('div');
-                el.className = 'item';
-                
-                const source = skill.isRemote ? \`GitHub (\${skill.sourceLocation})\` : skill.sourceLocation;
-
-                el.innerHTML = \`
-                    <div class="item-header">
-                        <strong>\${skill.name}</strong>
-                        \${isImported ? '<span class="tag">Imported</span>' : ''}
-                        \${skill.isRemote ? '<span class="tag" style="background: var(--vscode-charts-blue); color: white;">Remote</span>' : ''}
-                    </div>
-                    <div class="item-details" style="font-size:0.9em; color: var(--vscode-descriptionForeground); overflow-wrap: break-word;">Source: \${source}</div>
-                    <div class="item-actions">
-                        \${!isImported ? \`<button onclick="importSkill('\${skill.md5}')">Import</button>\` : \`<button class="secondary" onclick="importSkill('\${skill.md5}')">Re-Import/Overwrite</button>\`}
-                    </div>
-                \`;
-                container.appendChild(el);
-            });
-        }
-
-        function renderImported() {
-            const container = document.getElementById('imported-list');
-            container.innerHTML = '';
-            
-            state.imported.forEach(skill => {
-                const el = document.createElement('div');
-                el.className = 'item';
-                const tagsHtml = skill.tags.map(t => \`<span class="tag">\${t}</span>\`).join('');
-                el.innerHTML = \`
-                    <div class="item-header">
-                        <strong>\${skill.name}</strong>
-                    </div>
-                    <div>\${tagsHtml}</div>
-                    <div class="item-actions">
-                        <button onclick="addToWorkspace('\${skill.id}')">Add to Workspace</button>
-                        <button class="secondary" onclick="editTags('\${skill.id}', '\${skill.tags.join(',')}')">Edit Tags</button>
-                        <button class="secondary" style="background: var(--vscode-errorForeground)" onclick="deleteSkill('\${skill.id}')">Delete</button>
-                    </div>
-                \`;
-                container.appendChild(el);
-            });
-        }
-        
-        function renderPresets() {
-             const container = document.getElementById('presets-list');
-             container.innerHTML = '';
-             
-             state.presets.forEach(preset => {
-                 const el = document.createElement('div');
-                 el.className = 'item';
-                 const skillCount = preset.skillIds.length;
-                 
-                 let skillsSelection = '<div style="margin: 5px 0; max-height: 100px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); padding: 5px;">';
-                 state.imported.forEach(s => {
-                     const checked = preset.skillIds.includes(s.id) ? 'checked' : '';
-                     skillsSelection += \`<div><input type="checkbox" onchange="togglePresetSkill('\${preset.id}', '\${s.id}', this.checked)" \${checked}> \${s.name}</div>\`;
-                 });
-                 skillsSelection += '</div>';
-
-                 el.innerHTML = \`
-                    <div class="item-header"><strong>\${preset.name}</strong> (\${skillCount} skills)</div>
-                    <div class="item-content">
-                        \${skillsSelection}
-                    </div>
-                    <div class="item-actions">
-                        <button onclick="applyPreset('\${preset.id}', 'merge')">Apply (Merge)</button>
-                        <button onclick="applyPreset('\${preset.id}', 'replace')">Apply (Replace)</button>
-                        <button class="secondary" onclick="deletePreset('\${preset.id}')">Delete</button>
-                    </div>
-                 \`;
-                 container.appendChild(el);
-             });
-        }
-
-        // Actions
-        window.scanCustomPath = () => { vscode.postMessage({ type: 'scanCustomPath' }); };
-        
-        window.scanGitHub = () => { 
-            const url = document.getElementById('github-url').value;
-            if(url) vscode.postMessage({ type: 'scanGitHub', url }); 
-        };
-
-        window.importSkill = (md5) => {
-            const skill = state.discovered.find(s => s.md5 === md5);
-            if (skill) {
-                vscode.postMessage({ type: 'importSkill', skill });
-            }
-        };
-        
-        window.deleteSkill = (id) => {
-            if(confirm('Delete this skill?')) {
-                vscode.postMessage({ type: 'deleteSkill', id });
-            }
-        };
-
-        window.addToWorkspace = (id) => {
-            vscode.postMessage({ type: 'addToWorkspace', id });
-        };
-        
-        window.editTags = (id, currentTags) => {
-            const newTags = prompt('Enter tags (comma separated)', currentTags);
-            if (newTags !== null) {
-                const tags = newTags.split(',').map(t => t.trim()).filter(t => t);
-                vscode.postMessage({ type: 'updateSkillMetadata', id, tags });
-            }
-        };
-        
-        document.getElementById('btn-create-preset').onclick = () => {
-            const name = document.getElementById('new-preset-name').value;
-            if (name) {
-                vscode.postMessage({ type: 'createPreset', name });
-                document.getElementById('new-preset-name').value = '';
-            }
-        };
-        
-        window.deletePreset = (id) => {
-            if(confirm('Delete preset?')) {
-                vscode.postMessage({ type: 'deletePreset', id });
-            }
-        };
-        
-        window.togglePresetSkill = (presetId, skillId, checked) => {
-            const preset = state.presets.find(p => p.id === presetId);
-            if (preset) {
-                if (checked) {
-                    if (!preset.skillIds.includes(skillId)) preset.skillIds.push(skillId);
-                } else {
-                    preset.skillIds = preset.skillIds.filter(id => id !== skillId);
-                }
-                vscode.postMessage({ type: 'updatePreset', preset });
-            }
-        };
-
-        window.applyPreset = (id, mode) => {
-             vscode.postMessage({ type: 'applyPreset', id, mode });
-        };
-        
-        document.getElementById('btn-save-settings').onclick = () => {
-             const val = document.getElementById('setting-export-path').value;
-             vscode.postMessage({ type: 'updateSettings', defaultExportPath: val });
-        };
-    </script>
+<body data-view="${viewType}">
+  <div class="content" id="app-root"></div>
+  <script type="module" nonce="${nonce}" src="${toolkitUri}"></script>
+  <script type="module" nonce="${nonce}" src="${mainUri}"></script>
 </body>
 </html>`;
   }
