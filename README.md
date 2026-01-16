@@ -1,71 +1,74 @@
-# skills-wizard README
+<div align="center">
 
-This is the README for your extension "skills-wizard". After writing up a brief description, we recommend including the following sections.
+<img src="resources/wand.svg" width="128" height="128" alt="Skills Wizard Logo">
 
-## Features
+# Skills Wizard
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+**The Ultimate Skill Manager for Your Coding Assistants**
 
-For example if there is an image subfolder under your extension project workspace:
+[![Version](https://img.shields.io/visual-studio-marketplace/v/your-publisher.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=your-publisher.skills-wizard)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/your-publisher.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=your-publisher.skills-wizard)
+[![License](https://img.shields.io/github/license/your-username/skills-wizard?style=flat-square)](LICENSE)
 
-\!\[feature X\]\(images/feature-x.png\)
+[English](README.md) | [中文](README_CN.md) | [Changelog](CHANGELOG.md)
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+</div>
 
 ---
 
-## Following extension guidelines
+**Skills Wizard** is a powerful VS Code extension designed to manage, organize, and distribute "Skills" (prompt libraries/capabilities) for various coding assistants like Claude, Cursor, Copilot, and more.
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+It centralizes your scattered skills from different locations and allows you to easily inject them into your current workspace.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## ✨ Features
 
-## Working with Markdown
+- 🕵️ **Auto-Detection**: Automatically identifies skills from global and workspace paths including:
+  - `~/.claude/skills/`
+  - `~/.cursor/skills/`
+  - `~/.copilot/skills/`
+  - And many more...
+- 📦 **One-Click Import/Export**: Easily import skills into the extension or export them to your current project's workspace.
+- 🎨 **Preset Management**: Group multiple skills into presets. Apply an entire set of skills to a project in seconds.
+- 🏷️ **Custom Metadata**: Tag your skills and manage their sources for better organization.
+- 🐙 **GitHub Integration**: Import skills directly from any GitHub repository URL.
+- 🔄 **Cross-Platform**: Fully compatible with Windows, macOS, and Linux.
+- 🆔 **Smart Deduplication**: Uses MD5 hashing to prevent duplicate imports and manage updates efficiently.
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+## 🚀 Usage
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+1.  Click the **Skills Wizard** icon (🪄) in the Primary Side Bar.
+2.  **Import**: The extension will scan for existing skills. You can also import from a custom path or a GitHub URL.
+3.  **Manage**: View your library, edit skill tags, or organize them into presets.
+4.  **Apply**: Select a skill or a preset and export it to your current workspace.
 
-## For more information
+## ⚙️ Configuration
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+You can customize the extension behavior in VS Code settings:
 
-**Enjoy!**
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `skillsWizard.defaultExportPath` | `.claude/skills/` | The default directory where skills will be exported in your workspace. |
+
+## 📂 Supported Paths
+
+The extension scans and manages skills from these common locations:
+
+**Global:**
+- `~/.claude/skills/`
+- `~/.cursor/skills/`
+- `~/.config/opencode/skill/`
+- ...and others.
+
+**Workspace:**
+- `.claude/skills/`
+- `.cursor/skills/`
+- `.agent/skills/`
+- ...and others.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the GPLv3 License - see [LICENSE](LICENSE).
