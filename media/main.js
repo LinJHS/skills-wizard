@@ -226,7 +226,7 @@ function renderMySkillsView(root) {
   btnDeleteAll.addEventListener('click', () => {
     const selectedIds = [];
     root.querySelectorAll('.item-check:checked').forEach(cb => {
-      const skillId = cb.dataset.skillId;
+      const skillId = cb.getAttribute('data-skill-id');
       if (skillId) selectedIds.push(skillId);
     });
     if (selectedIds.length === 0) return;
@@ -240,38 +240,55 @@ function renderMySkillsView(root) {
   // Create Preset from Selected button
   const btnCreatePresetFromSelected = el('vscode-button', { appearance: 'secondary' });
   btnCreatePresetFromSelected.textContent = 'Create preset';
-  btnCreatePresetFromSelected.addEventListener('click', () => {
+  btnCreatePresetFromSelected.addEventListener('click', (e) => {
+    e.stopPropagation();
     const selectedIds = [];
     root.querySelectorAll('.item-check:checked').forEach(cb => {
-      const skillId = cb.dataset.skillId;
+      const skillId = cb.getAttribute('data-skill-id');
       if (skillId) selectedIds.push(skillId);
     });
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0) {
+      alert('Please select at least one skill first.');
+      return;
+    }
     
-    // Show inline input for preset name (original place)
-    const overlay = el('div', { class: 'row', style: 'margin: 8px 0; background: var(--vscode-input-background); padding: 8px; border-radius: 4px;' });
+    // Remove existing overlay if any
+    const existing = container.querySelector('.preset-name-overlay');
+    if (existing) container.removeChild(existing);
+    
+    // Show inline input for preset name (insert after bulkRow)
+    const overlay = el('div', { class: 'preset-name-overlay row', style: 'margin: 8px 0; background: var(--vscode-input-background); padding: 8px; border-radius: 4px;' });
     const nameInput = el('vscode-text-field', { placeholder: 'Preset name', class: 'grow' });
     const btnSave = el('vscode-button');
     btnSave.textContent = 'Create';
     btnSave.addEventListener('click', () => save());
     const btnCancel = el('vscode-button', { appearance: 'secondary' });
     btnCancel.textContent = 'Cancel';
-    btnCancel.addEventListener('click', () => container.removeChild(overlay));
+    btnCancel.addEventListener('click', () => {
+      const overlayEl = container.querySelector('.preset-name-overlay');
+      if (overlayEl) container.removeChild(overlayEl);
+    });
     
-    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+    nameInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') save(); });
     
     function save() {
       const name = nameInput.value.trim();
       if (!name) return;
       vscode.postMessage({ type: 'createPresetWithSkills', name, skillIds: selectedIds });
-      container.removeChild(overlay);
+      const overlayEl = container.querySelector('.preset-name-overlay');
+      if (overlayEl) container.removeChild(overlayEl);
     }
     
     overlay.appendChild(nameInput);
     overlay.appendChild(btnSave);
     overlay.appendChild(btnCancel);
-    container.insertBefore(overlay, bulkRow.nextSibling); // Insert right after bulkRow
-    nameInput.focus();
+    // Insert after bulkRow
+    if (bulkRow.nextSibling) {
+      container.insertBefore(overlay, bulkRow.nextSibling);
+    } else {
+      container.appendChild(overlay);
+    }
+    setTimeout(() => nameInput.focus(), 50);
   });
   bulkRow.appendChild(btnCreatePresetFromSelected);
   
@@ -279,11 +296,12 @@ function renderMySkillsView(root) {
   const searchRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
   const searchInput = el('vscode-text-field', { placeholder: 'Search skills...', class: 'grow', id: 'search-my-skills' });
   searchInput.addEventListener('input', () => {
-    // Re-render just the filtered list
+    // Re-render just the filtered list using data-original-index
     const term = searchInput.value.toLowerCase();
     const items = container.querySelectorAll('.skill-item');
-    items.forEach((item, idx) => {
-      const skill = state.imported[idx];
+    items.forEach((item) => {
+      const originalIdx = parseInt(item.dataset.originalIndex || '0');
+      const skill = state.imported[originalIdx];
       if (!skill) return;
       const matches = !term || 
         skill.name.toLowerCase().includes(term) ||
@@ -296,14 +314,13 @@ function renderMySkillsView(root) {
   container.appendChild(searchRow);
   container.appendChild(bulkRow);
 
-  // Render all items (search filter applied live above)
-  const searchTerm = '';
-  state.imported.forEach((skill, index) => {
-    const item = el('div', { class: 'skill-item', 'data-skill-id': skill.id });
+  // Render all items (search filter applied live via DOM style.display)
+  state.imported.forEach((skill, originalIndex) => {
+    const item = el('div', { class: 'skill-item', 'data-skill-id': skill.id, 'data-original-index': String(originalIndex) });
     
     // Header with checkbox and title
     const header = el('div', { class: 'row' });
-    const cb = el('vscode-checkbox', { class: 'item-check', 'data-index': index, 'data-skill-id': skill.id });
+    const cb = el('vscode-checkbox', { class: 'item-check', 'data-skill-id': skill.id });
     header.appendChild(cb);
     header.appendChild(el('div', { class: 'skill-title', text: skill.name }));
     item.appendChild(header);
@@ -485,19 +502,32 @@ function renderPresetsView(root) {
       e.stopPropagation();
       nameText.style.display = 'none';
       const input = el('vscode-text-field', { value: preset.name, class: 'grow' });
-      input.addEventListener('blur', () => saveName());
-      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveName(); });
+      let saved = false;
+      input.addEventListener('blur', () => {
+        if (!saved) {
+          saved = true;
+          saveName();
+        }
+      });
+      input.addEventListener('keydown', (ev) => { 
+        if (ev.key === 'Enter') {
+          saved = true;
+          saveName();
+        }
+      });
       function saveName() {
         const newName = input.value.trim();
         if (newName && newName !== preset.name) {
           vscode.postMessage({ type: 'updatePreset', preset: { ...preset, name: newName } });
         }
-        headerRow.removeChild(input);
+        if (headerRow.contains(input)) {
+          headerRow.removeChild(input);
+        }
         nameText.textContent = `${newName || preset.name} (${skillCount} skills)`;
         nameText.style.display = 'block';
       }
       headerRow.insertBefore(input, nameText);
-      input.focus();
+      setTimeout(() => input.focus(), 10);
     });
     headerRow.appendChild(nameText);
     block.appendChild(headerRow);
@@ -510,23 +540,40 @@ function renderPresetsView(root) {
     if (presetSkills.length === 0) {
       expanded.appendChild(el('div', { class: 'muted', text: 'No skills in this preset.' }));
     } else {
+      // Bulk actions for preset skills
+      const presetBulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+      const checkAllPreset = el('vscode-checkbox');
+      checkAllPreset.addEventListener('change', () => {
+        const checked = checkAllPreset.checked;
+        expanded.querySelectorAll('.preset-skill-check').forEach(cb => cb.checked = checked);
+      });
+      presetBulkRow.appendChild(checkAllPreset);
+      
+      const btnRemoveFromPreset = el('vscode-button', { appearance: 'secondary' });
+      btnRemoveFromPreset.textContent = 'Remove from preset';
+      btnRemoveFromPreset.addEventListener('click', () => {
+        const selectedIds = [];
+        expanded.querySelectorAll('.preset-skill-check:checked').forEach(cb => {
+          const skillId = cb.getAttribute('data-skill-id');
+          if (skillId) selectedIds.push(skillId);
+        });
+        if (selectedIds.length === 0) return;
+        if (confirm(`Remove ${selectedIds.length} skills from this preset?`)) {
+          const next = { ...preset, skillIds: (preset.skillIds || []).filter(id => !selectedIds.includes(id)) };
+          vscode.postMessage({ type: 'updatePreset', preset: next });
+        }
+      });
+      presetBulkRow.appendChild(btnRemoveFromPreset);
+      expanded.appendChild(presetBulkRow);
+
       presetSkills.forEach(skill => {
         const skillCard = el('div', { class: 'skill-card-mini' });
-        
-        // Header
-        const cardHeader = el('div', { class: 'row' });
-        const cb = el('vscode-checkbox');
-        cb.checked = true; // Always checked since it's in the preset
-        cb.addEventListener('change', (e) => {
-          e.stopPropagation();
-          const next = { ...preset, skillIds: Array.isArray(preset.skillIds) ? [...preset.skillIds] : [] };
-          if (cb.checked) {
-            if (!next.skillIds.includes(skill.id)) next.skillIds.push(skill.id);
-          } else {
-            next.skillIds = next.skillIds.filter((id) => id !== skill.id);
-          }
-          vscode.postMessage({ type: 'updatePreset', preset: next });
-        });
+    skillCard.addEventListener('click', (e) => e.stopPropagation());
+    
+    // Header with checkbox
+    const cardHeader = el('div', { class: 'row' });
+    const cb = el('vscode-checkbox', { class: 'preset-skill-check', 'data-skill-id': skill.id });
+    cb.setAttribute('data-skill-id', skill.id);
         cardHeader.appendChild(cb);
         cardHeader.appendChild(el('div', { class: 'skill-title-small', text: skill.name }));
         skillCard.appendChild(cardHeader);

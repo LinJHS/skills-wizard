@@ -668,7 +668,7 @@ export class SkillManager {
       return vscode.workspace.getConfiguration('skillsWizard').get('defaultExportPath') || '.claude/skills/';
   }
 
-  private async pickTargetRootFolder(): Promise<string> {
+  private async pickTargetRootFolder(): Promise<string | undefined> {
     // Prefer workspace folder (if any).
     const picked = await vscode.window.showWorkspaceFolderPick();
     if (picked) {
@@ -687,7 +687,7 @@ export class SkillManager {
       openLabel: 'Select target folder'
     });
     if (!uris || !uris[0]) {
-      throw new Error('No target folder selected');
+      return undefined; // User cancelled - don't throw error
     }
     return uris[0].fsPath;
   }
@@ -701,6 +701,9 @@ export class SkillManager {
       }
 
       const rootPath = await this.pickTargetRootFolder();
+      if (!rootPath) {
+        return; // User cancelled
+      }
       const relativeTarget = this.getDefaultExportPath();
       const targetDir = path.join(rootPath, relativeTarget, skill.name);
       
@@ -719,6 +722,9 @@ export class SkillManager {
       const skillsToApply = imported.filter(s => preset.skillIds.includes(s.id));
       
       const rootPath = await this.pickTargetRootFolder();
+      if (!rootPath) {
+        return; // User cancelled
+      }
       const relativeTarget = this.getDefaultExportPath();
       const targetBase = path.join(rootPath, relativeTarget);
       
