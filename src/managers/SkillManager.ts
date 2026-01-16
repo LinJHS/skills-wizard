@@ -114,12 +114,28 @@ export class SkillManager {
   }
 
   private extractDescriptionFromSkillMd(content: string): string | undefined {
-    const lines = content.split(/\r?\n/).map(l => l.trim());
-    const first = lines.find(l => l.length > 0);
+    const lines = content.split(/\r?\n/);
+    
+    // Check for YAML frontmatter (---...---)
+    if (lines[0]?.trim() === '---') {
+      const endIdx = lines.slice(1).findIndex(l => l.trim() === '---');
+      if (endIdx >= 0) {
+        const frontmatter = lines.slice(1, endIdx + 1).join('\n');
+        // Simple YAML parsing for description field (key: "value" or key: value)
+        const match = frontmatter.match(/^\s*description:\s*["']?([^"'\n]+)["']?/m);
+        if (match && match[1]) {
+          const desc = match[1].trim();
+          return desc.length > 200 ? desc.slice(0, 200) + '…' : desc;
+        }
+      }
+    }
+    
+    // Fallback: first non-empty line (skip leading dashes/hashes)
+    const trimmed = lines.map(l => l.trim());
+    const first = trimmed.find(l => l.length > 0 && !l.startsWith('---') && !l.startsWith('#'));
     if (!first) {
       return undefined;
     }
-    // Keep it short for list UI.
     return first.length > 200 ? first.slice(0, 200) + '…' : first;
   }
 
@@ -374,7 +390,7 @@ export class SkillManager {
 
     for (const skillMdPath of skillMdPaths) {
       const dirPath = path.posix.dirname(skillMdPath);
-      if (dirPath === '.' || dirPath === '/') continue;
+      if (dirPath === '.' || dirPath === '/') {continue;}
 
       const mdApiUrl = this.withGitHubRef(
         `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}/SKILL.md`,

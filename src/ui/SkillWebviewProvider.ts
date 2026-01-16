@@ -110,10 +110,20 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             }
             break;
         }
-        case 'deleteSkill': // For bulk delete
+        case 'deleteSkill': // For bulk delete (legacy)
             await this._skillManager.deleteSkill(data.id);
             await this.refresh();
             break;
+        case 'batchDeleteSkills': {
+            // Sequential delete
+            if (Array.isArray(data.ids)) {
+              for (const id of data.ids) {
+                await this._skillManager.deleteSkill(id);
+              }
+            }
+            await this.refresh();
+            break;
+        }
         case 'requestEditSkillTags': {
             // This is now mainly a fallback or invoked by logic, 
             // but for inline edit the JS might send direct updateSkillMetadata
@@ -154,21 +164,35 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             break;
         case 'createPreset':
              try {
-               const newPreset: Preset = {
-                   id: Date.now().toString(),
-                   name: data.name,
-                   skillIds: []
-               };
-               await this._skillManager.savePreset(newPreset);
-               await this.refresh();
+              const newPreset: Preset = {
+                  id: Date.now().toString(),
+                  name: data.name,
+                  skillIds: []
+              };
+              await this._skillManager.savePreset(newPreset);
+              await this.refresh();
+             } catch (e: any) {
+               vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
+             }
+             break;
+        case 'createPresetWithSkills':
+             try {
+              const newPreset: Preset = {
+                  id: Date.now().toString(),
+                  name: data.name,
+                  skillIds: Array.isArray(data.skillIds) ? data.skillIds : []
+              };
+              await this._skillManager.savePreset(newPreset);
+              await this.refresh();
+              vscode.window.showInformationMessage(`Preset "${data.name}" created with ${newPreset.skillIds.length} skills`);
              } catch (e: any) {
                vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
              }
              break;
         case 'updatePreset':
             try {
-              await this._skillManager.savePreset(data.preset);
-              await this.refresh();
+            await this._skillManager.savePreset(data.preset);
+            await this.refresh();
             } catch (e: any) {
               vscode.window.showErrorMessage(e?.message || 'Failed to update preset');
             }
@@ -180,8 +204,8 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
               'Delete'
             );
             if (res === 'Delete') {
-              await this._skillManager.deletePreset(data.id);
-              await this.refresh();
+            await this._skillManager.deletePreset(data.id);
+            await this.refresh();
             }
             break;
         }
@@ -195,7 +219,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             break;
         case 'updateSettings':
             if (typeof data.defaultExportPath === 'string') {
-              this._skillManager.updateDefaultExportPath(data.defaultExportPath);
+                this._skillManager.updateDefaultExportPath(data.defaultExportPath);
             }
             if (typeof data.storagePath === 'string') {
               this._skillManager.updateStoragePath(data.storagePath);
@@ -247,7 +271,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
   <link href="${stylesUri}" rel="stylesheet" />
-  <title>Skills Wizard</title>
+    <title>Skills Wizard</title>
 </head>
 <body data-view="${viewType}">
   <div class="content" id="app-root"></div>
