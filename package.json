@@ -18,7 +18,12 @@
     "claude",
     "copilot",
     "mcp",
-    "productivity"
+    "productivity",
+    "management",
+    "presets",
+    "github",
+    "workflow",
+    "tool"
   ],
   "icon": "resources/wand.png",
   "pricing": "Free",
@@ -27,7 +32,9 @@
   },
   "categories": [
     "AI",
-    "Chat"
+    "Chat",
+		"Programming Languages",
+		"Machine Learning"
   ],
   "repository": {
     "type": "git",
