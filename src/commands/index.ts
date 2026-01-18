@@ -125,9 +125,9 @@ export function registerCommands(
     vscode.commands.registerCommand('skillsWizard.importBundle', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectFiles: true,
-        canSelectFolders: true,
+        canSelectFolders: false,
         canSelectMany: false,
-        openLabel: 'Import bundle (.zip or folder)',
+        openLabel: 'Import bundle (.zip)',
         filters: { 'Zip Files': ['zip'] }
       });
       
