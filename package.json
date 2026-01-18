@@ -4,6 +4,24 @@
   "description": "Manipulate your Agent Skills, One-Stop, like Dark Magic.",
   "version": "1.0.0",
   "publisher": "LinJHS",
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/LinJHS/skills-wizard",
+  "bugs": {
+    "url": "https://github.com/LinJHS/skills-wizard/issues"
+  },
+  "keywords": [
+    "ai",
+    "chat",
+    "skills",
+    "agent",
+    "wizard",
+    "claude",
+    "copilot",
+    "mcp",
+    "productivity"
+  ],
+  "icon": "resources/wand.png",
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.108.1"
   },
