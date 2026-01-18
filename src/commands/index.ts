@@ -354,17 +354,36 @@ export function registerCommands(
       }
 
       try {
-        // 1. Local
+        // Priority: Use provided skill object in CLI args if available (Fixes opening duplicate imported skills locally)
+        // If the tree item passed the original discovered path, we should use it.
+        if (arg?.path && arg?.name) {
+           // If it's a remote skill or specifically marked regular path
+           if (arg.isRemote) {
+             const skillMdUrl = convertGitHubApiUrlToHtml(arg.path, true, 'SKILL.md');
+             await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
+             return;
+           } else {
+             // It's a local path from the argument
+             const p = path.join(arg.path, 'SKILL.md');
+             if (await fs.pathExists(p)) {
+               await vscode.window.showTextDocument(vscode.Uri.file(p));
+               return;
+             }
+           }
+        }
+
+        // Fallback: Lookup by ID
+        // 1. Local (Imported)
         const localPath = await skillManager.getSkillFilePath(skillId);
         if (localPath) {
           await vscode.window.showTextDocument(vscode.Uri.file(localPath));
           return;
         }
         
-        // 2. Remote
+        // 2. Remote (Discovered via Import Provider)
         const discovered = importProvider.getSkill(skillId);
         if (discovered && discovered.isRemote && discovered.path) {
-           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path + '/SKILL.md', true);
+           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path, true, 'SKILL.md');
            await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
            return;
         } else if (discovered && !discovered.isRemote) {
@@ -390,6 +409,21 @@ export function registerCommands(
       }
 
       try {
+        // Priority: Use provided skill object in CLI args
+        if (arg?.path) {
+           if (arg.isRemote) {
+             const webUrl = convertGitHubApiUrlToHtml(arg.path, false);
+             await vscode.env.openExternal(vscode.Uri.parse(webUrl));
+             return;
+           } else {
+              if (await fs.pathExists(arg.path)) {
+                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(arg.path));
+                return;
+              }
+           }
+        }
+
+        // Fallback: Lookup by ID
         // 1. Local
         const localPath = await skillManager.getSkillFilePath(skillId);
         if (localPath) {
@@ -433,7 +467,7 @@ export function registerCommands(
   };
   
   // Helper to convert GitHub API URL to HTML URL
-  const convertGitHubApiUrlToHtml = (apiUrl: string, isFile: boolean): string => {
+  const convertGitHubApiUrlToHtml = (apiUrl: string, isFile: boolean, appendFile?: string): string => {
       // API: https://api.github.com/repos/:owner/:repo/contents/:path?ref=:branch
       // HTML: https://github.com/:owner/:repo/tree/:branch/:path (dir)
       // HTML: https://github.com/:owner/:repo/blob/:branch/:path (file)
@@ -452,7 +486,14 @@ export function registerCommands(
         
         const owner = pathParts[1];
         const repo = pathParts[2];
-        const contentPath = pathParts.slice(4).join('/');
+        const initialContentPath = pathParts.slice(4).join('/');
+        let contentPath = initialContentPath;
+        
+        if (appendFile) {
+            // appendFile (SKILL.md) should be appended to the contentPath
+            contentPath = contentPath ? `${contentPath}/${appendFile}` : appendFile;
+        }
+
         const ref = u.searchParams.get('ref') || 'main'; // default to main if no ref
         
         const typeSegment = isFile ? 'blob' : 'tree';

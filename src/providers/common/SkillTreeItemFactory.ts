@@ -91,7 +91,12 @@ export class SkillTreeItemFactory {
     skillMdItem.command = {
       command: 'skillsWizard.openSkillMd',
       title: 'Open SKILL.md',
-      arguments: [skill.id]
+      arguments: [{
+        id: skill.id, 
+        path: skill.path, 
+        isRemote: skill.source === 'global',
+        name: skill.name
+      }]
     };
     items.push(skillMdItem);
 
@@ -105,7 +110,12 @@ export class SkillTreeItemFactory {
     skillDirItem.command = {
       command: 'skillsWizard.openSkillDir',
       title: 'Open Skill Directory',
-      arguments: [skill.id]
+      arguments: [{
+        id: skill.id, 
+        path: skill.path, 
+        isRemote: skill.source === 'global',
+        name: skill.name
+      }]
     };
     items.push(skillDirItem);
     
