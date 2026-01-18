@@ -16,6 +16,12 @@ let state = {
   storagePath: '',
 };
 
+const uiState = {
+  expandedPresetIds: new Set(),
+  selectedPresetId: null,
+  tagFilter: 'all',
+};
+
 window.addEventListener('message', (event) => {
   const message = event.data;
   
@@ -56,7 +62,7 @@ function el(tag, attrs = {}, children = []) {
       // Handle data-* attributes via dataset
       const dataKey = k.slice(5).replace(/-([a-z])/g, (g) => g[1].toUpperCase()); // kebab to camel
       node.dataset[dataKey] = String(v);
-    } else if (k === 'value' && (tag === 'input' || tag === 'textarea')) {
+    } else if (k === 'value' && (tag === 'input' || tag === 'textarea' || tag === 'select')) {
       // Set value property for input/textarea
       node.value = String(v);
     } else if (k === 'checked' && tag === 'input') {
@@ -235,16 +241,54 @@ function renderImportView(root) {
   btnScanFolder.textContent = 'Import from folder…';
   btnScanFolder.addEventListener('click', () => vscode.postMessage({ type: 'scanCustomPath' }));
   row1.appendChild(btnScanFolder);
+
+  const btnImportBundle = el('button', { class: 'secondary' });
+  btnImportBundle.textContent = 'Import bundle (.zip or folder)…';
+  btnImportBundle.addEventListener('click', () => vscode.postMessage({ type: 'importBundle' }));
+  row1.appendChild(btnImportBundle);
   actions.appendChild(row1);
 
   const row2 = el('div', { class: 'row' });
-  const ghInput = el('input', { type: 'text', placeholder: 'https://github.com/owner/repo', class: 'grow' });
-  row2.appendChild(ghInput);
-  
   const btnScanGh = el('button', { class: 'secondary' });
   btnScanGh.textContent = 'Import from GitHub';
   btnScanGh.addEventListener('click', () => {
-    if (ghInput.value) vscode.postMessage({ type: 'scanGitHub', url: ghInput.value });
+    const existing = actions.querySelector('.github-input-row');
+    if (existing) {
+      const input = existing.querySelector('input');
+      if (input) input.focus();
+      return;
+    }
+
+    const inputRow = el('div', { class: 'row github-input-row', style: 'margin-top: 6px;' });
+    const input = el('input', { type: 'text', placeholder: 'https://github.com/owner/repo', class: 'grow' });
+    const submit = el('button', { class: 'secondary' });
+    submit.textContent = 'Scan';
+    const cancel = el('button', { class: 'secondary' });
+    cancel.textContent = 'Cancel';
+
+    function cleanup() {
+      if (actions.contains(inputRow)) actions.removeChild(inputRow);
+    }
+
+    function submitUrl() {
+      const url = input.value.trim();
+      if (!url) return;
+      vscode.postMessage({ type: 'scanGitHub', url });
+      cleanup();
+    }
+
+    submit.addEventListener('click', submitUrl);
+    cancel.addEventListener('click', cleanup);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitUrl();
+      if (e.key === 'Escape') cleanup();
+    });
+
+    inputRow.appendChild(input);
+    inputRow.appendChild(submit);
+    inputRow.appendChild(cancel);
+    actions.appendChild(inputRow);
+    setTimeout(() => input.focus(), 10);
   });
   row2.appendChild(btnScanGh);
   actions.appendChild(row2);
@@ -349,22 +393,47 @@ function renderMySkillsView(root) {
   // Search bar
   const searchRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
   const searchInput = el('input', { type: 'text', placeholder: 'Search skills...', class: 'grow', id: 'search-my-skills' });
-  searchInput.addEventListener('input', () => {
+  function applyMySkillsFilters() {
     const term = searchInput.value.toLowerCase();
+    const tag = tagSelect.value;
     const items = container.querySelectorAll('.skill-item');
     items.forEach((item) => {
       const originalIdx = parseInt(item.dataset.originalIndex || '0');
       const skill = state.imported[originalIdx];
       if (!skill) return;
-      const matches = !term || 
+      const matchesTerm = !term ||
         skill.name.toLowerCase().includes(term) ||
         (skill.description || '').toLowerCase().includes(term) ||
         (skill.tags || []).some(t => t.toLowerCase().includes(term));
-      item.style.display = matches ? 'block' : 'none';
+      const matchesTag = tag === 'all' || (skill.tags || []).includes(tag);
+      item.style.display = matchesTerm && matchesTag ? 'block' : 'none';
     });
-  });
+  }
+  searchInput.addEventListener('input', applyMySkillsFilters);
   searchRow.appendChild(searchInput);
   container.appendChild(searchRow);
+
+  // Tag filter
+  const tagRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  tagRow.appendChild(el('span', { text: 'Tag' }));
+  const tagSelect = el('select', { class: 'grow' });
+  const uniqueTags = Array.from(new Set(
+    state.imported.flatMap(s => Array.isArray(s.tags) ? s.tags : [])
+  )).sort();
+  tagSelect.appendChild(el('option', { value: 'all', text: 'All tags' }));
+  uniqueTags.forEach(tag => {
+    tagSelect.appendChild(el('option', { value: tag, text: tag }));
+  });
+  if (!uniqueTags.includes(uiState.tagFilter)) {
+    uiState.tagFilter = 'all';
+  }
+  tagSelect.value = uiState.tagFilter;
+  tagSelect.addEventListener('change', () => {
+    uiState.tagFilter = tagSelect.value;
+    applyMySkillsFilters();
+  });
+  tagRow.appendChild(tagSelect);
+  container.appendChild(tagRow);
 
   // Bulk actions
   const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
@@ -393,6 +462,22 @@ function renderMySkillsView(root) {
     vscode.postMessage({ type: 'requestBatchDeleteSkills', ids: selectedIds });
   });
   bulkRow.appendChild(btnDeleteAll);
+
+  const btnExportSelected = el('button', { class: 'secondary' });
+  btnExportSelected.textContent = 'Export Selected (zip)';
+  btnExportSelected.addEventListener('click', () => {
+    const selectedIds = [];
+    root.querySelectorAll('.item-check:checked').forEach(cb => {
+      const skillId = cb.dataset.skillId;
+      if (skillId) selectedIds.push(skillId);
+    });
+    if (selectedIds.length === 0) {
+      alert('Please select at least one skill to export.');
+      return;
+    }
+    vscode.postMessage({ type: 'exportSkillsZip', ids: selectedIds });
+  });
+  bulkRow.appendChild(btnExportSelected);
 
   // Create Preset from Selected button
   const btnCreatePresetFromSelected = el('button', { class: 'secondary' });
@@ -484,6 +569,10 @@ function renderMySkillsView(root) {
     addBtn.textContent = 'Add to...';
     addBtn.addEventListener('click', () => vscode.postMessage({ type: 'addToWorkspace', id: skill.id }));
 
+    const viewBtn = el('button', { class: 'secondary' });
+    viewBtn.textContent = 'View files';
+    viewBtn.addEventListener('click', () => vscode.postMessage({ type: 'openSkillFile', id: skill.id }));
+
     const delBtn = el('button', { class: 'secondary' });
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestDeleteSkill', id: skill.id }));
@@ -492,6 +581,7 @@ function renderMySkillsView(root) {
     const restoreActions = () => {
       if (!actions) return;
       actions.appendChild(addBtn);
+      actions.appendChild(viewBtn);
       if (tagsBtn) actions.appendChild(tagsBtn);
       actions.appendChild(delBtn);
     };
@@ -501,6 +591,7 @@ function renderMySkillsView(root) {
 
     container.appendChild(item);
   });
+  applyMySkillsFilters();
 }
 
 function renderPresetsView(root) {
@@ -525,6 +616,51 @@ function renderPresetsView(root) {
   });
   searchRow.appendChild(searchInput);
   container.appendChild(searchRow);
+  
+  // Bulk export row
+  const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const checkAll = el('input', { type: 'checkbox' });
+  checkAll.addEventListener('change', () => {
+    const checked = checkAll.checked;
+    root.querySelectorAll('.preset-check').forEach(cb => {
+      cb.checked = checked;
+    });
+  });
+  bulkRow.appendChild(checkAll);
+  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  
+  const exportSelected = el('button', { class: 'secondary' });
+  exportSelected.textContent = 'Export Selected (zip)';
+  exportSelected.addEventListener('click', () => {
+    const selectedIds = [];
+    root.querySelectorAll('.preset-check:checked').forEach(cb => {
+      const presetId = cb.dataset.presetId;
+      if (presetId) selectedIds.push(presetId);
+    });
+    if (selectedIds.length === 0) {
+      alert('Please select at least one preset to export.');
+      return;
+    }
+    vscode.postMessage({ type: 'exportPresetsZip', ids: selectedIds });
+  });
+  bulkRow.appendChild(exportSelected);
+
+  const deleteSelected = el('button', { class: 'secondary' });
+  deleteSelected.textContent = 'Delete Selected';
+  deleteSelected.addEventListener('click', () => {
+    const selectedIds = [];
+    root.querySelectorAll('.preset-check:checked').forEach(cb => {
+      const presetId = cb.dataset.presetId;
+      if (presetId) selectedIds.push(presetId);
+    });
+    if (selectedIds.length === 0) {
+      alert('Please select at least one preset to delete.');
+      return;
+    }
+    vscode.postMessage({ type: 'requestBatchDeletePresets', ids: selectedIds });
+  });
+  bulkRow.appendChild(deleteSelected);
+  container.appendChild(bulkRow);
   container.appendChild(el('hr'));
 
   if (!state.presets.length) {
@@ -537,6 +673,9 @@ function renderPresetsView(root) {
     
     // Header row: preset name (inline editable)
     const headerRow = el('div', { class: 'row' });
+    const presetCheck = el('input', { type: 'checkbox', class: 'preset-check', 'data-preset-id': preset.id });
+    presetCheck.addEventListener('click', (e) => e.stopPropagation());
+    headerRow.appendChild(presetCheck);
     const skillCount = (preset.skillIds || []).length;
     const nameText = el('div', { class: 'skill-title editable', text: `${preset.name} (${skillCount} skills)` });
     nameText.title = 'Click to edit name';
@@ -590,6 +729,7 @@ function renderPresetsView(root) {
         block.classList.add('selected');
         const ab = block.querySelector('.preset-actions');
         if (ab) ab.style.display = 'flex';
+        uiState.selectedPresetId = preset.id;
       }
     });
     
@@ -632,20 +772,49 @@ function renderPresetsView(root) {
       expanded.appendChild(presetBulkRow);
 
       presetSkills.forEach(skill => {
-        const { card: skillCard, actions } = createSkillCard(skill, {
+        const { card: skillCard, actions, checkbox: cb } = createSkillCard(skill, {
           className: 'skill-card-mini',
           nameClass: 'skill-title-small editable',
           checkboxClass: 'preset-skill-check',
           actionBarClass: 'row action-bar',
-          actionBarStyle: 'margin-top: 8px;'
+          actionBarStyle: 'display:none; margin-top: 8px;'
         });
 
-        skillCard.addEventListener('click', (e) => e.stopPropagation());
+        skillCard.addEventListener('click', (e) => {
+          if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
+          const isSelected = skillCard.classList.contains('selected');
+          expanded.querySelectorAll('.skill-card-mini').forEach(card => {
+            card.classList.remove('selected');
+            const ab = card.querySelector('.action-bar');
+            if (ab) ab.style.display = 'none';
+          });
+          if (!isSelected) {
+            skillCard.classList.add('selected');
+            if (actions) actions.style.display = 'flex';
+            if (cb) cb.checked = true;
+          } else if (cb) {
+            cb.checked = false;
+          }
+        });
 
         let tagsBtn;
+        const removeBtn = el('button', { class: 'secondary' });
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          vscode.postMessage({ type: 'requestRemoveFromPreset', presetId: preset.id, skillIds: [skill.id] });
+        });
+        const viewBtn = el('button', { class: 'secondary' });
+        viewBtn.textContent = 'View files';
+        viewBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          vscode.postMessage({ type: 'openSkillFile', id: skill.id });
+        });
         const restoreActions = () => {
           if (!actions) return;
           if (tagsBtn) actions.appendChild(tagsBtn);
+          actions.appendChild(viewBtn);
+          actions.appendChild(removeBtn);
         };
         tagsBtn = createTagEditButton(skill, actions, restoreActions);
         restoreActions();
@@ -666,6 +835,11 @@ function renderPresetsView(root) {
       block.classList.toggle('expanded');
       expanded.style.display = isExpanded ? 'none' : 'block';
       btnEditSkills.textContent = isExpanded ? 'Edit skills' : 'Hide skills';
+      if (isExpanded) {
+        uiState.expandedPresetIds.delete(preset.id);
+      } else {
+        uiState.expandedPresetIds.add(preset.id);
+      }
     });
     actions.appendChild(btnEditSkills);
 
@@ -679,6 +853,11 @@ function renderPresetsView(root) {
     applyReplace.addEventListener('click', () => vscode.postMessage({ type: 'applyPreset', id: preset.id, mode: 'replace' }));
     actions.appendChild(applyReplace);
 
+    const exportOne = el('button', { class: 'secondary' });
+    exportOne.textContent = 'Export (zip)';
+    exportOne.addEventListener('click', () => vscode.postMessage({ type: 'exportPresetsZip', ids: [preset.id] }));
+    actions.appendChild(exportOne);
+
     const del = el('button', { class: 'secondary' });
     del.textContent = 'Delete';
     del.addEventListener('click', () => vscode.postMessage({ type: 'requestDeletePreset', id: preset.id }));
@@ -686,6 +865,17 @@ function renderPresetsView(root) {
 
     block.appendChild(actions);
     container.appendChild(block);
+
+    const shouldExpand = uiState.expandedPresetIds.has(preset.id);
+    if (shouldExpand) {
+      block.classList.add('expanded');
+      expanded.style.display = 'block';
+      btnEditSkills.textContent = 'Hide skills';
+    }
+    if (uiState.selectedPresetId === preset.id) {
+      block.classList.add('selected');
+      actions.style.display = 'flex';
+    }
   });
 }
 

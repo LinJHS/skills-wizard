@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import * as os from 'os';
+import AdmZip = require('adm-zip');
 import { getDefaultSkillsWizardStoragePath, resolvePath, GLOBAL_SKILL_PATHS, WORKSPACE_SKILL_PATHS, GITHUB_EXTRA_SKILL_PATHS } from '../utils/paths';
 import { Skill, Preset, UserConfig, DiscoveredSkill, SkillMetadata } from '../models/types';
 
@@ -111,6 +113,10 @@ export class SkillManager {
     const hash = crypto.createHash('md5');
     hash.update(buffer);
     return hash.digest('hex');
+  }
+
+  private normalizeName(value: string): string {
+    return value.trim().toLowerCase();
   }
 
   private extractDescriptionFromSkillMd(content: string): string | undefined {
@@ -256,16 +262,19 @@ export class SkillManager {
       await this.ensureReady();
       // Recursive scan
       const found = await this.scanRecursively(targetPath);
+      let added = 0;
       // Add to tempDiscovered
       for (const skill of found) {
           if (!this.tempDiscovered.some(s => s.md5 === skill.md5)) {
               this.tempDiscovered.push(skill);
+              added += 1;
           }
       }
+      return { added, total: found.length };
   }
 
-  private async scanRecursively(dir: string, depth: number = 0): Promise<DiscoveredSkill[]> {
-      if (depth > 5) {
+  private async scanRecursively(dir: string, depth: number = 0, maxDepth: number = 5): Promise<DiscoveredSkill[]> {
+      if (depth > maxDepth) {
         return [];
       }
       const results: DiscoveredSkill[] = [];
@@ -288,7 +297,7 @@ export class SkillManager {
           const entries = await fs.readdir(dir, { withFileTypes: true });
           for (const entry of entries) {
               if (entry.isDirectory() && !entry.name.startsWith('.')) {
-                  results.push(...await this.scanRecursively(path.join(dir, entry.name), depth + 1));
+                  results.push(...await this.scanRecursively(path.join(dir, entry.name), depth + 1, maxDepth));
               }
           }
       } catch (e) {
@@ -632,6 +641,19 @@ export class SkillManager {
 
   public async updateSkillMetadata(skillId: string, metadata: Partial<SkillMetadata>) {
       await this.ensureReady();
+      if (metadata.customName !== undefined) {
+          const trimmed = String(metadata.customName).trim();
+          if (!trimmed) {
+            throw new Error('Skill name cannot be empty');
+          }
+          const { imported } = await this.scanForSkills();
+          const desired = this.normalizeName(trimmed);
+          const conflict = imported.find(s => s.id !== skillId && this.normalizeName(s.name) === desired);
+          if (conflict) {
+            throw new Error(`Skill name "${trimmed}" already exists`);
+          }
+          metadata.customName = trimmed;
+      }
       if (!this.config.skills[skillId]) {
           this.config.skills[skillId] = { tags: [] };
       }
@@ -643,12 +665,26 @@ export class SkillManager {
       return this.config.presets || [];
   }
 
-  public async savePreset(preset: Preset) {
+  public async savePreset(preset: Preset, options: { allowOverwrite?: boolean } = {}) {
       await this.ensureReady();
       const { imported } = await this.scanForSkills();
-      if (imported.length < 1) {
+      const isNew = !this.config.presets.some(p => p.id === preset.id);
+      if (isNew && imported.length < 1) {
         throw new Error('Create preset requires at least 1 imported skill');
       }
+      const name = preset.name?.trim();
+      if (!name) {
+        throw new Error('Preset name cannot be empty');
+      }
+      const desired = this.normalizeName(name);
+      const conflict = (this.config.presets || []).find(p => p.id !== preset.id && this.normalizeName(p.name) === desired);
+      if (conflict) {
+        if (!options.allowOverwrite) {
+          throw new Error(`Preset name "${name}" already exists`);
+        }
+        this.config.presets = this.config.presets.filter(p => p.id !== conflict.id);
+      }
+      preset = { ...preset, name };
       const index = this.config.presets.findIndex(p => p.id === preset.id);
       if (index >= 0) {
           this.config.presets[index] = preset;
@@ -675,6 +711,203 @@ export class SkillManager {
         skillIds: (preset.skillIds || []).filter(id => !skillIds.includes(id))
       };
       await this.savePreset(next);
+  }
+
+  public async getSkillFilePath(skillId: string): Promise<string | undefined> {
+      await this.ensureReady();
+      const { imported } = await this.scanForSkills();
+      const skill = imported.find(s => s.id === skillId);
+      if (!skill) {
+        return undefined;
+      }
+      const skillMd = path.join(skill.path, 'SKILL.md');
+      if (await fs.pathExists(skillMd)) {
+        return skillMd;
+      }
+      return undefined;
+  }
+
+  public async exportSkillsToZip(skillIds: string[], outputPath: string) {
+      await this.ensureReady();
+      const { imported } = await this.scanForSkills();
+      const uniqueIds = Array.from(new Set(skillIds));
+      const skills = imported.filter(s => uniqueIds.includes(s.id));
+      if (skills.length === 0) {
+        throw new Error('No skills selected for export');
+      }
+      const zip = new AdmZip();
+      for (const skill of skills) {
+        zip.addLocalFolder(skill.path, path.posix.join('skills', skill.name));
+      }
+      zip.writeZip(outputPath);
+  }
+
+  public async exportPresetsToZip(presetIds: string[] | 'all', outputPath: string) {
+      await this.ensureReady();
+      const { imported } = await this.scanForSkills();
+      const skillById = new Map(imported.map(s => [s.id, s]));
+      const presets = presetIds === 'all'
+        ? (this.config.presets || [])
+        : (this.config.presets || []).filter(p => presetIds.includes(p.id));
+      if (presets.length === 0) {
+        throw new Error('No presets selected for export');
+      }
+      const exportPresets = presets.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        skillIds: Array.isArray(p.skillIds) ? p.skillIds : [],
+        skillNames: (p.skillIds || [])
+          .map(id => skillById.get(id)?.name)
+          .filter((name): name is string => typeof name === 'string')
+      }));
+      const zip = new AdmZip();
+      const bundle = { version: 2, presets: exportPresets };
+      zip.addFile('presets.json', Buffer.from(JSON.stringify(bundle, null, 2), 'utf8'));
+
+      const skillIdsToExport = new Set<string>();
+      for (const preset of presets) {
+        for (const id of preset.skillIds || []) {
+          if (skillById.has(id)) {
+            skillIdsToExport.add(id);
+          }
+        }
+      }
+      for (const id of skillIdsToExport) {
+        const skill = skillById.get(id);
+        if (skill) {
+          zip.addLocalFolder(skill.path, path.posix.join('skills', skill.name));
+        }
+      }
+      zip.writeZip(outputPath);
+  }
+
+  public async importBundle(
+    sourcePath: string,
+    allowOverwrite: boolean,
+    importPresetsAsIs: boolean = false
+  ) {
+      await this.ensureReady();
+      const stat = await fs.stat(sourcePath);
+      if (stat.isDirectory()) {
+        return this.importFromDirectory(sourcePath, allowOverwrite, importPresetsAsIs);
+      }
+      if (stat.isFile() && sourcePath.toLowerCase().endsWith('.zip')) {
+        return this.importFromZip(sourcePath, allowOverwrite, importPresetsAsIs);
+      }
+      throw new Error('Unsupported import source (use a folder or .zip file)');
+  }
+
+  private async importFromZip(zipPath: string, allowOverwrite: boolean, importPresetsAsIs: boolean) {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'skills-wizard-'));
+      try {
+        const zip = new AdmZip(zipPath);
+        zip.extractAllTo(tempDir, true);
+        return await this.importFromDirectory(tempDir, allowOverwrite, importPresetsAsIs);
+      } finally {
+        await fs.remove(tempDir);
+      }
+  }
+
+  private async importFromDirectory(sourceDir: string, allowOverwrite: boolean, importPresetsAsIs: boolean) {
+      const discovered = await this.scanRecursively(sourceDir, 0, 10);
+      const uniqueByName = new Map<string, DiscoveredSkill>();
+      for (const skill of discovered) {
+        const key = this.normalizeName(skill.name);
+        if (!uniqueByName.has(key)) {
+          uniqueByName.set(key, skill);
+        }
+      }
+      const uniqueSkills = Array.from(uniqueByName.values());
+      const { imported } = await this.scanForSkills();
+      const existingByName = new Map(imported.map(s => [this.normalizeName(s.name), s]));
+
+      let importedCount = 0;
+      let overwrittenCount = 0;
+      let skippedCount = 0;
+
+      for (const skill of uniqueSkills) {
+        const existing = existingByName.get(this.normalizeName(skill.name));
+        if (existing && existing.md5 !== skill.md5) {
+          if (!allowOverwrite) {
+            skippedCount += 1;
+            continue;
+          }
+          overwrittenCount += 1;
+        }
+        await this.importSkill(skill);
+        importedCount += 1;
+      }
+
+      let presetsImported = 0;
+      let presetsOverwritten = 0;
+      let presetsSkipped = 0;
+
+      const presetFile = path.join(sourceDir, 'presets.json');
+      if (await fs.pathExists(presetFile)) {
+        try {
+          const raw = await fs.readJSON(presetFile);
+          const presetItems = Array.isArray(raw?.presets) ? raw.presets : [];
+          if (presetItems.length > 0) {
+            const { imported: afterImport } = await this.scanForSkills();
+            const nameToId = new Map(afterImport.map(s => [this.normalizeName(s.name), s.id]));
+            const idsInStore = new Set(afterImport.map(s => s.id));
+            for (const item of presetItems) {
+              const presetName = typeof item?.name === 'string' ? item.name.trim() : '';
+              if (!presetName) {
+                continue;
+              }
+              const description = typeof item?.description === 'string' ? item.description : undefined;
+              const skillIdsFromNames = (Array.isArray(item?.skillNames) ? item.skillNames : [])
+                .map((n: any) => (typeof n === 'string' ? nameToId.get(this.normalizeName(n)) : undefined))
+                .filter((id: string | undefined): id is string => typeof id === 'string');
+              const skillIdsFromIds = (Array.isArray(item?.skillIds) ? item.skillIds : [])
+                .filter((id: any): id is string => typeof id === 'string' && idsInStore.has(id));
+              const skillIds = (importPresetsAsIs && skillIdsFromIds.length > 0)
+                ? skillIdsFromIds
+                : skillIdsFromNames;
+              if (skillIds.length === 0) {
+                continue;
+              }
+              const presetId = typeof item?.id === 'string' && item.id.trim().length > 0
+                ? item.id.trim()
+                : Date.now().toString() + Math.random().toString(16).slice(2);
+              const conflictById = (this.config.presets || []).find(p => p.id === presetId);
+              const conflictByName = (this.config.presets || []).find(p => this.normalizeName(p.name) === this.normalizeName(presetName) && p.id !== presetId);
+              const conflict = conflictById || conflictByName;
+              if (conflict && !allowOverwrite) {
+                presetsSkipped += 1;
+                continue;
+              }
+              if (conflict && allowOverwrite) {
+                presetsOverwritten += 1;
+              }
+              const preset: Preset = {
+                id: conflict?.id ?? presetId,
+                name: presetName,
+                description,
+                skillIds
+              };
+              await this.savePreset(preset, { allowOverwrite });
+              if (!conflict) {
+                presetsImported += 1;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to import presets.json', e);
+        }
+      }
+
+      return {
+        totalSkills: uniqueSkills.length,
+        imported: importedCount,
+        overwritten: overwrittenCount,
+        skipped: skippedCount,
+        presetsImported,
+        presetsOverwritten,
+        presetsSkipped
+      };
   }
 
   protected getDefaultExportPath(): string {

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as os from 'os';
 import { SkillManager } from '../managers/SkillManager';
 import { Preset } from '../models/types';
 
@@ -65,10 +67,65 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                 openLabel: 'Scan for Skills'
             });
             if (uris && uris[0]) {
-                await this._skillManager.scanCustomPath(uris[0].fsPath);
+                const result = await this._skillManager.scanCustomPath(uris[0].fsPath);
+                if (result.total === 0) {
+                  vscode.window.showWarningMessage('No skills found in selected folder.');
+                } else {
+                  vscode.window.showInformationMessage(`Found ${result.total} skill(s) (${result.added} new).`);
+                }
                 await this.refresh();
             }
             break;
+        case 'importBundle': {
+            const uris = await vscode.window.showOpenDialog({
+                canSelectFiles: true,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: 'Import bundle (.zip or folder)',
+                filters: { 'Zip Files': ['zip'] }
+            });
+            if (!uris || !uris[0]) {
+              break;
+            }
+            const choice = await vscode.window.showWarningMessage(
+              'If names conflict, how should we handle them?',
+              { modal: true },
+              'Overwrite',
+              'Skip conflicts'
+            );
+            if (!choice) {
+              break;
+            }
+            const allowOverwrite = choice === 'Overwrite';
+            const importMode = await vscode.window.showInformationMessage(
+              'Choose preset import mode',
+              { modal: true },
+              'Import by name',
+              'Import as-is'
+            );
+            if (!importMode) {
+              break;
+            }
+            const importPresetsAsIs = importMode === 'Import as-is';
+            try {
+              const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Importing bundle...',
+                cancellable: false
+              }, async () => {
+                return await this._skillManager.importBundle(uris[0].fsPath, allowOverwrite, importPresetsAsIs);
+              });
+              vscode.window.showInformationMessage(
+                `Imported ${result.imported}/${result.totalSkills} skill(s)` +
+                `, overwritten ${result.overwritten}, skipped ${result.skipped}. ` +
+                `Presets: +${result.presetsImported}, overwritten ${result.presetsOverwritten}, skipped ${result.presetsSkipped}.`
+              );
+              await this.refreshAll();
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to import bundle');
+            }
+            break;
+        }
         case 'scanGitHub':
             try {
                 await vscode.window.withProgress({
@@ -83,7 +140,9 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                         'If your repo stores skills in another subfolder, try a URL like: https://github.com/<owner>/<repo>/tree/<branch>/<path>.'
                       );
                     } else if (result.added === 0) {
-                      vscode.window.showInformationMessage('No new skills discovered (they may already be imported or discovered).');
+                      vscode.window.showInformationMessage(`Found ${result.total} skill(s) in repo (0 new).`);
+                    } else {
+                      vscode.window.showInformationMessage(`Found ${result.total} skill(s) in repo (${result.added} new).`);
                     }
                 });
                 await this.refresh();
@@ -92,29 +151,74 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             }
             break;
         case 'importSkill':
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "Importing Skill...",
-                cancellable: false
-            }, async () => {
-                const importedId = await this._skillManager.importSkill(data.skill);
-                if (Array.isArray(data.tags)) {
-                  await this._skillManager.updateSkillMetadata(importedId, { tags: data.tags });
+            {
+              const { imported } = await this._skillManager.scanForSkills();
+              const conflict = imported.find(s =>
+                s.name.trim().toLowerCase() === String(data.skill?.name || '').trim().toLowerCase() &&
+                s.md5 !== data.skill?.md5
+              );
+              if (conflict) {
+                const res = await vscode.window.showWarningMessage(
+                  `Skill name "${data.skill.name}" already exists. Overwrite it?`,
+                  { modal: true },
+                  'Overwrite'
+                );
+                if (res !== 'Overwrite') {
+                  break;
                 }
-            });
-            if (data.isSingle) {
-              vscode.window.showInformationMessage(`Skill "${data.skill.name}" imported successfully`);
+              }
+              await vscode.window.withProgress({
+                  location: vscode.ProgressLocation.Notification,
+                  title: "Importing Skill...",
+                  cancellable: false
+              }, async () => {
+                  const importedId = await this._skillManager.importSkill(data.skill);
+                  if (Array.isArray(data.tags)) {
+                    await this._skillManager.updateSkillMetadata(importedId, { tags: data.tags });
+                  }
+              });
+              if (data.isSingle) {
+                vscode.window.showInformationMessage(`Skill "${data.skill.name}" imported successfully`);
+              }
+              await this.refreshAll();
+              break;
             }
-            await this.refreshAll();
             break;
         case 'batchImportSkills':
             if (Array.isArray(data.items)) {
+                const { imported } = await this._skillManager.scanForSkills();
+                const existingByName = new Map(imported.map(s => [s.name.trim().toLowerCase(), s]));
+                const conflicts = data.items.filter((item: any) => {
+                  const name = String(item?.skill?.name || '').trim().toLowerCase();
+                  const existing = existingByName.get(name);
+                  return existing && existing.md5 !== item?.skill?.md5;
+                });
+                let allowOverwrite = false;
+                if (conflicts.length > 0) {
+                  const res = await vscode.window.showWarningMessage(
+                    `${conflicts.length} skill(s) have name conflicts. Overwrite them?`,
+                    { modal: true },
+                    'Overwrite',
+                    'Skip conflicts'
+                  );
+                  if (!res) {
+                    break;
+                  }
+                  allowOverwrite = res === 'Overwrite';
+                }
+                const itemsToImport = conflicts.length > 0 && !allowOverwrite
+                  ? data.items.filter((item: any) => {
+                      const name = String(item?.skill?.name || '').trim().toLowerCase();
+                      const existing = existingByName.get(name);
+                      return !(existing && existing.md5 !== item?.skill?.md5);
+                    })
+                  : data.items;
                 await vscode.window.withProgress({
                     location: vscode.ProgressLocation.Notification,
-                    title: `Importing ${data.items.length} Skills...`,
+                    title: `Importing ${itemsToImport.length} Skills...`,
                     cancellable: false
                 }, async () => {
-                    for (const item of data.items) {
+                    for (const item of itemsToImport) {
                         if (item.skill) {
                             const importedId = await this._skillManager.importSkill(item.skill);
                             if (Array.isArray(item.tags)) {
@@ -123,7 +227,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                         }
                     }
                 });
-                vscode.window.showInformationMessage(`Successfully imported ${data.items.length} skills`);
+                vscode.window.showInformationMessage(`Successfully imported ${itemsToImport.length} skills`);
             }
             await this.refreshAll();
             break;
@@ -210,6 +314,19 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showErrorMessage('Failed to add skill: ' + e.message);
             }
             break;
+        case 'openSkillFile': {
+            try {
+              const filePath = await this._skillManager.getSkillFilePath(data.id);
+              if (!filePath) {
+                vscode.window.showErrorMessage('SKILL.md not found for this skill');
+                break;
+              }
+              await vscode.window.showTextDocument(vscode.Uri.file(filePath), { preview: false });
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to open skill file');
+            }
+            break;
+        }
         case 'createPreset':
              try {
              const newPreset: Preset = {
@@ -220,7 +337,24 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
              await this._skillManager.savePreset(newPreset);
              await this.refresh();
              } catch (e: any) {
-               vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
+               const msg = e?.message || 'Failed to create preset';
+               if (msg.includes('already exists')) {
+                 const res = await vscode.window.showWarningMessage(
+                   `Preset "${data.name}" already exists. Overwrite it?`,
+                   { modal: true },
+                   'Overwrite'
+                 );
+                 if (res === 'Overwrite') {
+                   await this._skillManager.savePreset({
+                     id: Date.now().toString(),
+                     name: data.name,
+                     skillIds: []
+                   }, { allowOverwrite: true });
+                   await this.refreshAll();
+                   break;
+                 }
+               }
+               vscode.window.showErrorMessage(msg);
              }
              break;
         case 'createPresetWithSkills':
@@ -234,7 +368,24 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
               vscode.window.showInformationMessage(`Preset "${data.name}" created with ${newPreset.skillIds.length} skills`);
               await this.refreshAll();
              } catch (e: any) {
-               vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
+               const msg = e?.message || 'Failed to create preset';
+               if (msg.includes('already exists')) {
+                 const res = await vscode.window.showWarningMessage(
+                   `Preset "${data.name}" already exists. Overwrite it?`,
+                   { modal: true },
+                   'Overwrite'
+                 );
+                 if (res === 'Overwrite') {
+                   await this._skillManager.savePreset({
+                     id: Date.now().toString(),
+                     name: data.name,
+                     skillIds: Array.isArray(data.skillIds) ? data.skillIds : []
+                   }, { allowOverwrite: true });
+                   await this.refreshAll();
+                   break;
+                 }
+               }
+               vscode.window.showErrorMessage(msg);
              }
              break;
         case 'updatePreset':
@@ -242,7 +393,20 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             await this._skillManager.savePreset(data.preset);
               await this.refreshAll();
             } catch (e: any) {
-              vscode.window.showErrorMessage(e?.message || 'Failed to update preset');
+              const msg = e?.message || 'Failed to update preset';
+              if (msg.includes('already exists')) {
+                const res = await vscode.window.showWarningMessage(
+                  `Preset "${data.preset?.name}" already exists. Overwrite it?`,
+                  { modal: true },
+                  'Overwrite'
+                );
+                if (res === 'Overwrite') {
+                  await this._skillManager.savePreset(data.preset, { allowOverwrite: true });
+                  await this.refreshAll();
+                  break;
+                }
+              }
+              vscode.window.showErrorMessage(msg);
             }
             break;
         case 'requestRemoveFromPreset': {
@@ -272,6 +436,24 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             }
             break;
         }
+        case 'requestBatchDeletePresets': {
+            if (!Array.isArray(data.ids) || data.ids.length === 0) {
+              break;
+            }
+            const res = await vscode.window.showWarningMessage(
+              `Delete ${data.ids.length} preset(s)?`,
+              { modal: true },
+              'Delete'
+            );
+            if (res === 'Delete') {
+              for (const id of data.ids) {
+                await this._skillManager.deletePreset(id);
+              }
+              vscode.window.showInformationMessage(`Deleted ${data.ids.length} preset(s)`);
+              await this.refreshAll();
+            }
+            break;
+        }
         case 'applyPreset':
             try {
                 await this._skillManager.applyPreset(data.id, data.mode);
@@ -280,6 +462,41 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showErrorMessage('Failed to apply preset: ' + e.message);
             }
             break;
+        case 'exportSkillsZip': {
+            try {
+              const uri = await vscode.window.showSaveDialog({
+                filters: { 'Zip Files': ['zip'] },
+                saveLabel: 'Export skills zip',
+                defaultUri: vscode.Uri.file(path.join(os.homedir(), 'skills-wizard-skills.zip'))
+              });
+              if (!uri) {
+                break;
+              }
+              await this._skillManager.exportSkillsToZip(Array.isArray(data.ids) ? data.ids : [], uri.fsPath);
+              vscode.window.showInformationMessage('Skills exported to zip');
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to export skills zip');
+            }
+            break;
+        }
+        case 'exportPresetsZip': {
+            try {
+              const uri = await vscode.window.showSaveDialog({
+                filters: { 'Zip Files': ['zip'] },
+                saveLabel: 'Export presets zip',
+                defaultUri: vscode.Uri.file(path.join(os.homedir(), 'skills-wizard-presets.zip'))
+              });
+              if (!uri) {
+                break;
+              }
+              const ids = data?.all ? 'all' : (Array.isArray(data.ids) ? data.ids : []);
+              await this._skillManager.exportPresetsToZip(ids, uri.fsPath);
+              vscode.window.showInformationMessage('Presets exported to zip');
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to export presets zip');
+            }
+            break;
+        }
         case 'updateSettings':
             if (typeof data.defaultExportPath === 'string') {
                 this._skillManager.updateDefaultExportPath(data.defaultExportPath);
@@ -290,12 +507,16 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             await this.refresh();
             break;
         case 'updateSkillMetadata':
-            await this._skillManager.updateSkillMetadata(data.id, { 
-                tags: data.tags, 
-                customDescription: data.customDescription,
-                customName: data.customName
-            });
-            await this.refreshAll();
+            try {
+              await this._skillManager.updateSkillMetadata(data.id, { 
+                  tags: data.tags, 
+                  customDescription: data.customDescription,
+                  customName: data.customName
+              });
+              await this.refreshAll();
+            } catch (e: any) {
+              vscode.window.showErrorMessage(e?.message || 'Failed to update skill');
+            }
             break;
       }
     });
