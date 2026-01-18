@@ -172,13 +172,19 @@ body {
   margin: 12px 0;
 }
 
+.select-all-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
 .select-all-label {
   font-size: 13px;
   color: var(--vscode-foreground);
-  cursor: pointer;
+  /* cursor: pointer; handled by wrapper */
   -webkit-user-select: none;
   user-select: none;
-  margin-left: 4px;
 }
 
 .setting-group {

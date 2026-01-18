@@ -310,8 +310,10 @@ function renderImportView(root) {
     const checked = checkAll.checked;
     root.querySelectorAll('.item-check').forEach(cb => cb.checked = checked);
   });
-  bulkRow.appendChild(checkAll);
-  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  const wrapper = el('label', { class: 'select-all-wrapper' });
+  wrapper.appendChild(checkAll);
+  wrapper.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  bulkRow.appendChild(wrapper);
   
   const btnImportAll = el('button', { class: 'secondary' });
   btnImportAll.textContent = 'Import Selected';
@@ -444,8 +446,10 @@ function renderMySkillsView(root) {
       cb.checked = checked;
     });
   });
-  bulkRow.appendChild(checkAll);
-  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  const wrapper = el('label', { class: 'select-all-wrapper' });
+  wrapper.appendChild(checkAll);
+  wrapper.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  bulkRow.appendChild(wrapper);
   
   const btnDeleteAll = el('button', { class: 'secondary' });
   btnDeleteAll.textContent = 'Delete Selected';
@@ -626,8 +630,10 @@ function renderPresetsView(root) {
       cb.checked = checked;
     });
   });
-  bulkRow.appendChild(checkAll);
-  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  const wrapper = el('label', { class: 'select-all-wrapper' });
+  wrapper.appendChild(checkAll);
+  wrapper.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+  bulkRow.appendChild(wrapper);
   
   const exportSelected = el('button', { class: 'secondary' });
   exportSelected.textContent = 'Export Selected (zip)';
@@ -750,8 +756,10 @@ function renderPresetsView(root) {
         const checked = checkAllPreset.checked;
         expanded.querySelectorAll('.preset-skill-check').forEach(cb => cb.checked = checked);
       });
-      presetBulkRow.appendChild(checkAllPreset);
-      presetBulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+      const wrapper = el('label', { class: 'select-all-wrapper' });
+      wrapper.appendChild(checkAllPreset);
+      wrapper.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
+      presetBulkRow.appendChild(wrapper);
       
       const btnRemoveFromPreset = el('button', { class: 'secondary' });
       btnRemoveFromPreset.textContent = 'Remove from preset';
