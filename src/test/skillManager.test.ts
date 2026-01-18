@@ -116,4 +116,93 @@ suite('SkillManager Test Suite', () => {
             await fs.remove(externalSkillDir);
         }
     });
+
+    test('should handle life complete lifecycle: import, metadata, preset, and export', async () => {
+        const externalSkillDir = path.join(os.tmpdir(), 'lifecycle-test-skill-' + Date.now());
+        const exportRootDir = path.join(os.tmpdir(), 'lifecycle-test-export-' + Date.now());
+        await fs.ensureDir(externalSkillDir);
+        await fs.ensureDir(exportRootDir);
+        
+        // Setup source skill
+        await fs.writeFile(path.join(externalSkillDir, 'SKILL.md'), '--- \ndescription: Lifecycle Test\n--- \n# Content');
+
+        try {
+            // Setup Subclass
+            class LifecycleSkillManager extends SkillManager {
+                protected getStoragePathFromSettings(): string {
+                    return tempDir;
+                }
+                protected async pickTargetRootFolder(): Promise<string | undefined> {
+                    return exportRootDir;
+                }
+                protected getDefaultExportPath(): string {
+                    return 'exported-skills/';
+                }
+                public get initializationPromise() { return (this as any).ready; }
+            }
+            
+            const manager = new LifecycleSkillManager(context);
+            await manager.initializationPromise;
+
+            // 1. Import
+            const md5 = await manager.calculateMD5(path.join(externalSkillDir, 'SKILL.md'));
+            const discovered = {
+                name: 'lifecycle-skill',
+                path: externalSkillDir,
+                md5: md5,
+                description: 'Lifecycle Test',
+                sourceLocation: externalSkillDir,
+                isRemote: false
+            };
+            const skillId = await manager.importSkill(discovered);
+            assert.strictEqual(skillId, md5);
+
+            // 2. Metadata Update
+            await manager.updateSkillMetadata(skillId, { tags: ['test-tag'], customName: 'Renamed Skill' });
+            // Verify config
+            let config = await fs.readJSON(path.join(tempDir, 'config.json'));
+            assert.deepStrictEqual(config.skills[skillId].tags, ['test-tag']);
+            assert.strictEqual(config.skills[skillId].customName, 'Renamed Skill');
+
+            // 3. Create Preset
+            const presetId = 'preset-1';
+            await manager.savePreset({
+                id: presetId,
+                name: 'Test Preset',
+                skillIds: [skillId]
+            });
+            const presets = manager.getPresets();
+            assert.strictEqual(presets.length, 1);
+            assert.strictEqual(presets[0].id, presetId);
+
+            // 4. Export Skill
+            await manager.exportSkillToWorkspace(skillId);
+            const expectedExportPath = path.join(exportRootDir, 'exported-skills', 'lifecycle-skill', 'SKILL.md');
+            assert.ok(await fs.pathExists(expectedExportPath), 'Exported skill file should exist');
+
+            // 5. Apply Preset (Merge mode)
+            // Cleanup export dir first to verify preset application works
+            await fs.remove(path.join(exportRootDir, 'exported-skills'));
+            
+            await manager.applyPreset(presetId, 'merge');
+            assert.ok(await fs.pathExists(expectedExportPath), 'Preset applied skill should exist');
+
+            // 6. Delete Preset
+            await manager.deletePreset(presetId);
+            assert.strictEqual(manager.getPresets().length, 0, 'Preset should be deleted');
+
+            // 7. Delete Skill
+            await manager.deleteSkill(skillId);
+            // Verify file gone from storage
+            const storedSkillPath = path.join(tempDir, 'skills', 'lifecycle-skill');
+            assert.strictEqual(await fs.pathExists(storedSkillPath), false, 'Skill should be removed from storage');
+            // Verify config gone
+            config = await fs.readJSON(path.join(tempDir, 'config.json'));
+            assert.strictEqual(config.skills[skillId], undefined, 'Skill metadata should be removed from config');
+
+        } finally {
+            await fs.remove(externalSkillDir);
+            await fs.remove(exportRootDir);
+        }
+    });
 });
