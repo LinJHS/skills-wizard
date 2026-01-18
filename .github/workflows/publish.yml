@@ -24,7 +24,7 @@ jobs:
           version: 8
       - uses: actions/setup-node@v4
         with:
-          node-version: 18.x
+          node-version: 20.x
           cache: 'pnpm'
       - run: pnpm install
       - name: Run Tests (Linux)
@@ -50,7 +50,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18.x
+          node-version: 20.x
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
@@ -68,15 +68,15 @@ jobs:
       - name: Build VSIX
         run: npx vsce package -o extension.vsix
 
-      # 发布到 VS Code Marketplace
-      - name: Publish to Marketplace
-        run: npx vsce publish --packagePath extension.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-
       # 创建 GitHub Release 并上传 .vsix
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: extension.vsix
           generate_release_notes: true
+
+      # 发布到 VS Code Marketplace
+      - name: Publish to Marketplace
+        run: npx vsce publish --packagePath extension.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

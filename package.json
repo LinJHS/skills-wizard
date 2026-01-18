@@ -82,6 +82,7 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.44",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "adm-zip": "^0.5.16",
     "fs-extra": "^11.3.3"
