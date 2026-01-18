@@ -1,189 +1,362 @@
-/**
- * Skill Manager - Main coordinator using modular managers
- */
-
 import * as vscode from 'vscode';
+import * as fs from 'fs-extra';
 import * as path from 'path';
-import { StorageManager } from './StorageManager';
-import { SkillImporter } from './SkillImporter';
-import { SkillExporter } from './SkillExporter';
-import { PresetManager } from './PresetManager';
-import { SkillScanner, ScanResult } from './SkillScanner';
-import { Skill, Preset, SkillMetadata, DiscoveredSkill } from '../models/types';
-import { getDefaultSkillsWizardStoragePath, resolvePath } from '../utils/paths';
+import { Skill, Preset, DiscoveredSkill, SkillMetadata } from '../models/types';
+import { ConfigService } from '../services/ConfigService';
+import { FileService } from '../services/FileService';
+import { ScanService } from '../services/ScanService';
+import { GitHubService } from '../services/GitHubService';
+import { ImportExportService } from '../services/ImportExportService';
+import { PresetService } from '../services/PresetService';
 
+/**
+ * SkillManager
+ * Main coordinator that orchestrates all skill-related operations by delegating to specialized services.
+ * This class provides a unified interface for the extension to interact with skills, presets, and configurations.
+ */
 export class SkillManager {
-  private storage: StorageManager;
-  private importer: SkillImporter;
-  private exporter: SkillExporter;
-  private presetManager: PresetManager;
-  private scanner: SkillScanner;
-  private ready: Promise<void>;
+  // Services
+  private configService: ConfigService;
+  private fileService: FileService;
+  private scanService: ScanService;
+  private githubService: GitHubService;
+  private importExportService: ImportExportService;
+  private presetService: PresetService;
 
-  constructor(private context: vscode.ExtensionContext) {
-    const storagePath = this.getStoragePathFromSettings();
-    this.storage = new StorageManager(storagePath);
-    this.importer = new SkillImporter(this.storage);
-    this.exporter = new SkillExporter(this.storage);
-    this.presetManager = new PresetManager(this.storage);
-    this.scanner = new SkillScanner();
-    this.ready = this.init();
+  constructor(context: vscode.ExtensionContext) {
+    // Initialize services in dependency order
+    this.configService = new ConfigService(context);
+    this.fileService = new FileService();
+    this.scanService = new ScanService(this.fileService, this.configService);
+    this.githubService = new GitHubService(this.fileService);
+    this.importExportService = new ImportExportService(
+      this.configService,
+      this.fileService,
+      this.scanService,
+      this.githubService
+    );
+    this.presetService = new PresetService(this.configService, this.fileService, this.scanService);
   }
 
-  private getStoragePathFromSettings(): string {
-    const custom = vscode.workspace.getConfiguration('skillsWizard').get<string>('storagePath')?.trim();
-    if (custom) {
-      return resolvePath(custom);
-    }
-    return getDefaultSkillsWizardStoragePath();
-  }
-
-  private async init(): Promise<void> {
-    await this.storage.init();
-  }
-
-  private async ensureReady(): Promise<void> {
-    await this.ready;
-  }
+  // ==================== Scanning Operations ====================
 
   /**
-   * Scan for skills in default paths
+   * Scan for skills from global and workspace paths.
    */
-  async scanForSkills(): Promise<{ discovered: DiscoveredSkill[]; imported: Skill[] }> {
-    await this.ensureReady();
-    const discovered = await this.scanner.scanDefaultPaths();
-    const imported = await this.importer.getAllSkills();
-    return { discovered, imported };
-  }
-
-  /**
-   * Scan custom path
-   */
-  async scanCustomPath(customPath: string): Promise<ScanResult> {
-    await this.ensureReady();
-    return await this.scanner.scanCustomPath(customPath);
-  }
-
-  /**
-   * Scan GitHub repository
-   */
-  async scanGitHub(url: string): Promise<ScanResult> {
-    await this.ensureReady();
-    return await this.scanner.scanGitHub(url);
-  }
-
-  /**
-   * Import a skill
-   */
-  async importSkill(skill: DiscoveredSkill): Promise<string> {
-    await this.ensureReady();
-    return await this.importer.importSkill(skill);
-  }
-
-  /**
-   * Delete a skill
-   */
-  async deleteSkill(skillId: string): Promise<void> {
-    await this.ensureReady();
-    await this.importer.deleteSkill(skillId);
-  }
-
-  /**
-   * Update skill metadata
-   */
-  async updateSkillMetadata(skillId: string, updates: Partial<SkillMetadata>): Promise<void> {
-    await this.ensureReady();
-    await this.importer.updateMetadata(skillId, updates);
-  }
-
-  /**
-   * Export skill to workspace
-   */
-  async exportSkillToWorkspace(skillId: string, targetPath?: string): Promise<void> {
-    await this.ensureReady();
-    await this.exporter.exportToWorkspace(skillId, targetPath);
-  }
-
-  /**
-   * Export skills to zip
-   */
-  async exportSkillsToZip(skillIds: string[], zipPath: string): Promise<void> {
-    await this.ensureReady();
-    await this.exporter.exportToZip(skillIds, zipPath);
-  }
-
-  /**
-   * Get skill file path
-   */
-  async getSkillFilePath(skillId: string): Promise<string | null> {
-    await this.ensureReady();
-    const skillPath = this.storage.getSkillPath(skillId);
-    return path.join(skillPath, 'SKILL.md');
-  }
-
-  /**
-   * Get effective storage path
-   */
-  async getEffectiveStoragePath(): Promise<string> {
-    return this.getStoragePathFromSettings();
-  }
-
-  /**
-   * Update storage path
-   */
-  updateStoragePath(newPath: string): void {
-    // This would require recreating all managers
-    vscode.window.showInformationMessage('Please reload VS Code to apply storage path changes.');
-  }
-
-  /**
-   * Update default export path
-   */
-  updateDefaultExportPath(path: string): void {
-    vscode.workspace.getConfiguration('skillsWizard').update('defaultExportPath', path, vscode.ConfigurationTarget.Global);
-  }
-
-  // Preset methods
-  
-  getPresets(): Preset[] {
-    return this.presetManager.getPresets();
-  }
-
-  async savePreset(preset: Preset, options?: { allowOverwrite?: boolean }): Promise<void> {
-    await this.ensureReady();
-    await this.presetManager.savePreset(preset, options);
-  }
-
-  async deletePreset(presetId: string): Promise<void> {
-    await this.ensureReady();
-    await this.presetManager.deletePreset(presetId);
-  }
-
-  async removeSkillsFromPreset(presetId: string, skillIds: string[]): Promise<void> {
-    await this.ensureReady();
-    await this.presetManager.removeSkillsFromPreset(presetId, skillIds);
-  }
-
-  async applyPreset(presetId: string, mode: 'merge' | 'replace'): Promise<void> {
-    await this.ensureReady();
-    await this.presetManager.applyPreset(presetId, mode);
-  }
-
-  async exportPresetsToZip(ids: string[] | 'all', zipPath: string): Promise<void> {
-    await this.ensureReady();
-    await this.exporter.exportPresetsToZip(ids, zipPath);
-  }
-
-  async importBundle(bundlePath: string, allowOverwrite: boolean, importPresetsAsIs: boolean): Promise<{
-    imported: number;
-    overwritten: number;
-    skipped: number;
-    totalSkills: number;
-    presetsImported: number;
-    presetsOverwritten: number;
-    presetsSkipped: number;
+  public async scanForSkills(): Promise<{ 
+    discovered: DiscoveredSkill[], 
+    imported: Skill[],
+    allDiscovered?: DiscoveredSkill[] 
   }> {
-    await this.ensureReady();
-    return await this.exporter.importBundle(bundlePath, allowOverwrite, importPresetsAsIs);
+    return this.scanService.scanForSkills();
+  }
+
+  /**
+   * Scan a custom path for skills.
+   */
+  public async scanCustomPath(targetPath: string): Promise<{ added: number; total: number }> {
+    return this.scanService.scanCustomPath(targetPath);
+  }
+
+  /**
+   * Scan a GitHub repository for skills.
+   */
+  public async scanGitHub(repoUrl: string): Promise<{ added: number; total: number }> {
+    await this.configService.ensureReady();
+    const skills = await this.githubService.scanGitHub(repoUrl);
+    const added = this.scanService.addToTempDiscovered(skills);
+    return { added, total: skills.length };
+  }
+
+  // ==================== Import/Export Operations ====================
+
+  /**
+   * Import a skill.
+   */
+  public async importSkill(skill: DiscoveredSkill): Promise<string> {
+    return this.importExportService.importSkill(skill);
+  }
+
+  /**
+   * Import a bundle (zip or directory).
+   */
+  public async importBundle(
+    sourcePath: string,
+    allowOverwrite: boolean,
+    importPresetsAsIs: boolean = false
+  ) {
+    return this.importExportService.importBundle(sourcePath, allowOverwrite, importPresetsAsIs);
+  }
+
+  /**
+   * Export skills to a zip file.
+   */
+  public async exportSkillsToZip(skillIds: string[], outputPath: string): Promise<void> {
+    return this.importExportService.exportSkillsToZip(skillIds, outputPath);
+  }
+
+  /**
+   * Export presets to a zip file.
+   */
+  public async exportPresetsToZip(presetIds: string[] | 'all', outputPath: string): Promise<void> {
+    return this.importExportService.exportPresetsToZip(presetIds, outputPath);
+  }
+
+  /**
+   * Export a skill to the workspace.
+   */
+  public async exportSkillToWorkspace(skillId: string, merge: boolean = true): Promise<void> {
+    return this.importExportService.exportSkillToWorkspace(skillId);
+  }
+
+  /**
+   * Apply a preset to the workspace.
+   */
+  public async applyPreset(presetId: string, mode: 'merge' | 'replace'): Promise<void> {
+    return this.importExportService.applyPreset(presetId, mode);
+  }
+
+  // ==================== Skill Management ====================
+
+  /**
+   * Delete a skill.
+   */
+  public async deleteSkill(skillId: string): Promise<void> {
+    return this.scanService.deleteSkill(skillId);
+  }
+
+  /**
+   * Update skill metadata.
+   */
+  public async updateSkillMetadata(skillId: string, metadata: Partial<SkillMetadata>): Promise<void> {
+    return this.scanService.updateSkillMetadata(skillId, metadata);
+  }
+
+  /**
+   * Get the file path of a skill's SKILL.md.
+   */
+  public async getSkillFilePath(skillId: string): Promise<string | undefined> {
+    return this.scanService.getSkillFilePath(skillId);
+  }
+
+  // ==================== Preset Management ====================
+
+  /**
+   * Get all presets.
+   */
+  public getPresets(): Preset[] {
+    return this.presetService.getPresets();
+  }
+
+  /**
+   * Save a preset (create or update).
+   */
+  public async savePreset(preset: Preset, options: { allowOverwrite?: boolean } = {}): Promise<void> {
+    return this.presetService.savePreset(preset, options);
+  }
+
+  /**
+   * Delete a preset.
+   */
+  public async deletePreset(presetId: string): Promise<void> {
+    return this.presetService.deletePreset(presetId);
+  }
+
+  /**
+   * Remove skills from a preset.
+   */
+  public async removeSkillsFromPreset(presetId: string, skillIds: string[]): Promise<void> {
+    return this.presetService.removeSkillsFromPreset(presetId, skillIds);
+  }
+
+  // ==================== Configuration Management ====================
+
+  /**
+   * Update the default export path.
+   */
+  public updateDefaultExportPath(newPath: string): void {
+    this.configService.updateDefaultExportPath(newPath);
+  }
+
+  /**
+   * Update the storage path.
+   */
+  public updateStoragePath(newPath: string): void {
+    this.configService.updateStoragePath(newPath);
+  }
+
+  /**
+   * Get the effective storage path.
+   */
+  public async getEffectiveStoragePath(): Promise<string> {
+    await this.configService.ensureReady();
+    return this.configService.getStoragePath();
+  }
+
+  // ==================== Utility Methods ====================
+
+  /**
+   * Calculate MD5 hash of a file.
+   */
+  public async calculateMD5(filePath: string): Promise<string> {
+    return this.fileService.calculateMD5(filePath);
+  }
+
+  /**
+   * Calculate MD5 hash from a buffer.
+   */
+  public calculateMD5FromBuffer(buffer: Buffer): string {
+    return this.fileService.calculateMD5FromBuffer(buffer);
+  }
+
+  /**
+   * Update skill name in SKILL.md file.
+   * Handles MD5 changes and updates all references (config, presets).
+   */
+  public async updateSkillName(skillId: string, newName: string): Promise<void> {
+    const skillPath = await this.scanService.getSkillFilePath(skillId);
+    if (!skillPath) {
+      return;
+    }
+
+    // Calculate MD5 before update
+    const oldMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // Update the file
+    await this.fileService.updateSkillName(skillPath, newName);
+
+    // Calculate MD5 after update
+    const newMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // If MD5 changed, we need to migrate the skill
+    if (oldMd5 !== newMd5) {
+      await this.migrateSkillId(oldMd5, newMd5);
+    }
+  }
+
+  /**
+   * Update skill description in SKILL.md file.
+   * Handles MD5 changes and updates all references (config, presets).
+   */
+  public async updateSkillDescription(skillId: string, newDescription: string): Promise<void> {
+    const skillPath = await this.scanService.getSkillFilePath(skillId);
+    if (!skillPath) {
+      return;
+    }
+
+    // Calculate MD5 before update
+    const oldMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // Update the file
+    await this.fileService.updateSkillDescription(skillPath, newDescription);
+
+    // Calculate MD5 after update
+    const newMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // If MD5 changed, we need to migrate the skill
+    if (oldMd5 !== newMd5) {
+      await this.migrateSkillId(oldMd5, newMd5);
+    }
+  }
+
+  /**
+   * Migrate skill from old ID to new ID (when MD5 changes).
+   * Updates folder name, config, and preset references.
+   */
+  private async migrateSkillId(oldId: string, newId: string): Promise<void> {
+    console.log(`[SkillManager] Starting migration: ${oldId} -> ${newId}`);
+    await this.configService.ensureReady();
+    const skillsPath = this.configService.getSkillsPath();
+    
+    const oldPath = path.join(skillsPath, oldId);
+    const newPath = path.join(skillsPath, newId);
+    
+    // Rename folder
+    if (await fs.pathExists(oldPath)) {
+      console.log(`[SkillManager] Renaming folder: ${oldPath} -> ${newPath}`);
+      await fs.move(oldPath, newPath, { overwrite: true });
+      console.log('[SkillManager] Folder renamed successfully');
+    } else {
+      console.warn(`[SkillManager] Old path does not exist: ${oldPath}`);
+    }
+    
+    // Update config and preset references
+    const config = this.configService.getConfig();
+    
+    // Migrate skill metadata
+    if (config.skills[oldId]) {
+      console.log(`[SkillManager] Migrating skill metadata from ${oldId} to ${newId}`);
+      config.skills[newId] = config.skills[oldId];
+      delete config.skills[oldId];
+    } else {
+      console.log(`[SkillManager] No metadata found for ${oldId}, creating empty entry for ${newId}`);
+      config.skills[newId] = { tags: [] };
+    }
+    
+    // Update all preset references
+    const presetsBeforeMigration = JSON.stringify(config.presets);
+    config.presets = (config.presets || []).map(p => ({
+      ...p,
+      skillIds: (p.skillIds || []).map(id => (id === oldId ? newId : id))
+    }));
+    
+    if (presetsBeforeMigration !== JSON.stringify(config.presets)) {
+      console.log(`[SkillManager] Updated preset references: ${oldId} -> ${newId}`);
+    }
+    
+    await this.configService.saveConfig();
+    console.log('[SkillManager] Config saved successfully');
+  }
+
+  /**
+   * Check all skills for MD5 changes and migrate if necessary.
+   * This is called by the file watcher when SKILL.md files change.
+   */
+  public async synchronizeSkillIds(): Promise<boolean> {
+    await this.configService.ensureReady();
+    const skillsPath = this.configService.getSkillsPath();
+    
+    if (!await fs.pathExists(skillsPath)) {
+      return false;
+    }
+
+    let hasMigrations = false;
+    
+    // Get a fresh list of directories before processing
+    let entries = await fs.readdir(skillsPath, { withFileTypes: true });
+    
+    // Process all migrations
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      
+      const skillPath = path.join(skillsPath, entry.name);
+      const skillMdPath = path.join(skillPath, 'SKILL.md');
+      
+      if (!await fs.pathExists(skillMdPath)) {
+        continue;
+      }
+      
+      // Calculate current MD5
+      const currentMd5 = await this.fileService.calculateMD5(skillMdPath);
+      const folderId = entry.name; // Current folder name (should be old MD5)
+      
+      // If MD5 changed (folder name != current MD5), migrate
+      if (folderId !== currentMd5) {
+        console.log(`[SkillManager] Detected MD5 change: ${folderId} -> ${currentMd5}`);
+        await this.migrateSkillId(folderId, currentMd5);
+        hasMigrations = true;
+        console.log(`[SkillManager] Migration completed for ${folderId}`);
+      }
+    }
+    
+    // If we had migrations, wait a bit to ensure file system operations are complete
+    if (hasMigrations) {
+      console.log('[SkillManager] Waiting for file system to settle after migrations...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return hasMigrations;
   }
 }

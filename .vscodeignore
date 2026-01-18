@@ -16,3 +16,5 @@ pnpm-lock.yaml
 .vscode-test.mjs
 
 docs/
+*.bat
+.cursor/
