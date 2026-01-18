@@ -48,8 +48,14 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
+        case 'webviewReady': // Handle the ready signal from webview
+            await this.refresh();
+            break;
         case 'refresh':
             await this.refresh();
+            break;
+        case 'error':
+            vscode.window.showErrorMessage(`Webview Error (${this._viewType}): ${data.message}`);
             break;
         case 'scanCustomPath':
             const uris = await vscode.window.showOpenDialog({ 
@@ -269,14 +275,14 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline' https: vscode-resource: 'nonce-${nonce}';" />
   <link href="${stylesUri}" rel="stylesheet" />
     <title>Skills Wizard</title>
 </head>
 <body data-view="${viewType}">
   <div class="content" id="app-root"></div>
   <script type="module" nonce="${nonce}" src="${toolkitUri}"></script>
-  <script type="module" nonce="${nonce}" src="${mainUri}"></script>
+  <script nonce="${nonce}" src="${mainUri}"></script>
 </body>
 </html>`;
   }
