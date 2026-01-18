@@ -12,8 +12,7 @@
   "activationEvents": [
     "onView:skillsWizard.importView",
     "onView:skillsWizard.mySkillsView",
-    "onView:skillsWizard.presetsView",
-    "onView:skillsWizard.settingsView"
+    "onView:skillsWizard.presetsView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -22,41 +21,297 @@
         {
           "id": "skills-wizard-view-container",
           "title": "Skills Wizard",
-          "icon": "resources/wand.png"
+          "icon": "$(wand)"
         }
       ]
     },
     "views": {
       "skills-wizard-view-container": [
         {
-          "type": "webview",
           "id": "skillsWizard.importView",
-          "name": "Import Skills"
+          "name": "Import Skills",
+          "icon": "$(cloud-download)"
         },
         {
-          "type": "webview",
           "id": "skillsWizard.mySkillsView",
-          "name": "My Skills"
+          "name": "My Skills",
+          "icon": "$(folder-library)"
         },
         {
-          "type": "webview",
           "id": "skillsWizard.presetsView",
-          "name": "Presets"
-        },
-        {
-          "type": "webview",
-          "id": "skillsWizard.settingsView",
-          "name": "Settings"
+          "name": "Presets",
+          "icon": "$(package)"
         }
       ]
     },
-    "commands": [
+    "viewsWelcome": [
       {
-        "command": "skills-wizard.refresh",
-        "title": "Refresh Skills",
-        "icon": "$(refresh)"
+        "view": "skillsWizard.importView",
+        "contents": "No skills found to import.\n[$(search) Scan Workspace](command:skillsWizard.scanWorkspace)\n[$(folder) Scan Custom Path](command:skillsWizard.scanCustomPath)\n[$(github) Import from GitHub](command:skillsWizard.scanGitHub)\n[$(file-zip) Import Bundle](command:skillsWizard.importBundle)"
+      },
+      {
+        "view": "skillsWizard.mySkillsView",
+        "contents": "No skills imported yet.\nImport skills from the Import Skills view."
+      },
+      {
+        "view": "skillsWizard.presetsView",
+        "contents": "No presets created yet.\nImport at least one skill first, then create presets.\n[$(add) Create Preset](command:skillsWizard.createPreset)"
       }
     ],
+    "commands": [
+      {
+        "command": "skillsWizard.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.scanWorkspace",
+        "title": "Scan Workspace for Skills",
+        "icon": "$(search)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.scanCustomPath",
+        "title": "Scan Custom Path",
+        "icon": "$(folder)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.scanGitHub",
+        "title": "Import from GitHub",
+        "icon": "$(github)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.importBundle",
+        "title": "Import Bundle (.zip)",
+        "icon": "$(file-zip)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.importSkill",
+        "title": "Import Skill",
+        "icon": "$(cloud-download)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.importAllSkills",
+        "title": "Import All Skills",
+        "icon": "$(cloud-download)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.openSkill",
+        "title": "Open Skill File",
+        "icon": "$(go-to-file)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.addToWorkspace",
+        "title": "Add to Workspace",
+        "icon": "$(export)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.editTags",
+        "title": "Edit Tags",
+        "icon": "$(tag)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.deleteSkill",
+        "title": "Delete Skill",
+        "icon": "$(trash)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.toggleGroupByTags",
+        "title": "Toggle Group by Tags",
+        "icon": "$(group-by-ref-type)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.exportSkillsZip",
+        "title": "Export Selected Skills to Zip",
+        "icon": "$(export)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.createPreset",
+        "title": "Create Preset",
+        "icon": "$(add)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.createPresetFromSelection",
+        "title": "Create Preset from Selected Skills",
+        "icon": "$(add)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.renamePreset",
+        "title": "Rename Preset",
+        "icon": "$(edit)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.deletePreset",
+        "title": "Delete Preset",
+        "icon": "$(trash)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.applyPreset",
+        "title": "Apply Preset to Workspace",
+        "icon": "$(export)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.addSkillsToPreset",
+        "title": "Add Skills to Preset",
+        "icon": "$(add)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.removeFromPreset",
+        "title": "Remove from Preset",
+        "icon": "$(remove)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.exportPresetZip",
+        "title": "Export Preset to Zip",
+        "icon": "$(export)",
+        "category": "Skills Wizard"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "skillsWizard.refresh",
+          "when": "view == skillsWizard.importView || view == skillsWizard.mySkillsView || view == skillsWizard.presetsView",
+          "group": "navigation"
+        },
+        {
+          "command": "skillsWizard.scanWorkspace",
+          "when": "view == skillsWizard.importView",
+          "group": "navigation"
+        },
+        {
+          "command": "skillsWizard.scanCustomPath",
+          "when": "view == skillsWizard.importView",
+          "group": "1_import@1"
+        },
+        {
+          "command": "skillsWizard.scanGitHub",
+          "when": "view == skillsWizard.importView",
+          "group": "1_import@2"
+        },
+        {
+          "command": "skillsWizard.importBundle",
+          "when": "view == skillsWizard.importView",
+          "group": "1_import@3"
+        },
+        {
+          "command": "skillsWizard.importAllSkills",
+          "when": "view == skillsWizard.importView",
+          "group": "2_actions@1"
+        },
+        {
+          "command": "skillsWizard.toggleGroupByTags",
+          "when": "view == skillsWizard.mySkillsView",
+          "group": "navigation"
+        },
+        {
+          "command": "skillsWizard.createPreset",
+          "when": "view == skillsWizard.presetsView",
+          "group": "navigation"
+        },
+        {
+          "command": "skillsWizard.exportSkillsZip",
+          "when": "view == skillsWizard.mySkillsView",
+          "group": "2_export@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "skillsWizard.importSkill",
+          "when": "view == skillsWizard.importView && viewItem == skill",
+          "group": "inline"
+        },
+        {
+          "command": "skillsWizard.importSkill",
+          "when": "view == skillsWizard.importView && viewItem == skill",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "skillsWizard.openSkill",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "inline"
+        },
+        {
+          "command": "skillsWizard.addToWorkspace",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "skillsWizard.editTags",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "skillsWizard.deleteSkill",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "skillsWizard.createPresetFromSelection",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "4_preset@1"
+        },
+        {
+          "command": "skillsWizard.applyPreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "inline"
+        },
+        {
+          "command": "skillsWizard.applyPreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "skillsWizard.addSkillsToPreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "skillsWizard.renamePreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "skillsWizard.exportPresetZip",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "3_export@1"
+        },
+        {
+          "command": "skillsWizard.deletePreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "4_delete@1"
+        },
+        {
+          "command": "skillsWizard.removeFromPreset",
+          "when": "view == skillsWizard.presetsView && viewItem == presetSkill",
+          "group": "inline"
+        },
+        {
+          "command": "skillsWizard.openSkill",
+          "when": "view == skillsWizard.presetsView && viewItem == presetSkill",
+          "group": "1_actions@1"
+        }
+      ]
+    },
     "configuration": {
       "title": "Skills Wizard",
       "properties": {
