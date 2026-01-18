@@ -6,9 +6,11 @@
 
 **你的代码助手技能管理专家**
 
+开发者: [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com/LinJHS)
+
 [![Version](https://img.shields.io/visual-studio-marketplace/v/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
-[![License](https://img.shields.io/github/license/your-username/skills-wizard?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/github/license/LinJHS/skills-wizard?style=flat-square)](LICENSE)
 
 [English](README.md) | [中文](README_CN.md) | [更新日志](CHANGELOG.md)
 
