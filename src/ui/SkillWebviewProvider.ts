@@ -553,33 +553,24 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
 
   private _getHtmlForWebview(webview: vscode.Webview, viewType: string) {
     const nonce = getNonce();
+    const toolkitUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'webview-ui-toolkit', 'dist', 'toolkit.min.js')
+    );
     const mainUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
     const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css'));
-    const codiconsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css')
-    );
-    const codiconsFontUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf')
-    );
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
-  <link href="${codiconsUri}" rel="stylesheet" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline' https: vscode-resource: 'nonce-${nonce}';" />
   <link href="${stylesUri}" rel="stylesheet" />
-  <style nonce="${nonce}">
-    @font-face {
-      font-family: 'codicon';
-      src: url('${codiconsFontUri}') format('truetype');
-    }
-  </style>
-  <title>Skills Wizard</title>
+    <title>Skills Wizard</title>
 </head>
 <body data-view="${viewType}">
   <div class="content" id="app-root"></div>
+  <script type="module" nonce="${nonce}" src="${toolkitUri}"></script>
   <script nonce="${nonce}" src="${mainUri}"></script>
 </body>
 </html>`;
