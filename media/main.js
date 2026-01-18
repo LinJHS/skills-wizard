@@ -56,6 +56,12 @@ function el(tag, attrs = {}, children = []) {
       // Handle data-* attributes via dataset
       const dataKey = k.slice(5).replace(/-([a-z])/g, (g) => g[1].toUpperCase()); // kebab to camel
       node.dataset[dataKey] = String(v);
+    } else if (k === 'value' && (tag === 'input' || tag === 'textarea')) {
+      // Set value property for input/textarea
+      node.value = String(v);
+    } else if (k === 'checked' && tag === 'input') {
+      // Set checked property for checkbox/radio
+      node.checked = !!v;
     } else {
       node.setAttribute(k, String(v));
     }
@@ -92,29 +98,29 @@ function renderImportView(root) {
   const actions = el('div', { class: 'stack' });
   const row1 = el('div', { class: 'row' });
   
-  const btnScan = el('vscode-button');
+  const btnScan = el('button', { class: 'primary' });
   btnScan.textContent = 'Scan (Global + Workspace)';
   btnScan.addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
   row1.appendChild(btnScan);
 
-  const btnScanFolder = el('vscode-button', { appearance: 'secondary' });
+  const btnScanFolder = el('button', { class: 'secondary' });
   btnScanFolder.textContent = 'Import from folder…';
   btnScanFolder.addEventListener('click', () => vscode.postMessage({ type: 'scanCustomPath' }));
   row1.appendChild(btnScanFolder);
   actions.appendChild(row1);
 
   const row2 = el('div', { class: 'row' });
-  const ghInput = el('vscode-text-field', { placeholder: 'https://github.com/owner/repo', class: 'grow' });
+  const ghInput = el('input', { type: 'text', placeholder: 'https://github.com/owner/repo', class: 'grow' });
   row2.appendChild(ghInput);
   
-  const btnScanGh = el('vscode-button', { appearance: 'secondary' });
+  const btnScanGh = el('button', { class: 'secondary' });
   btnScanGh.textContent = 'Import from GitHub';
   btnScanGh.addEventListener('click', () => {
     if (ghInput.value) vscode.postMessage({ type: 'scanGitHub', url: ghInput.value });
   });
   row2.appendChild(btnScanGh);
   actions.appendChild(row2);
-  actions.appendChild(el('vscode-divider'));
+  actions.appendChild(el('hr'));
   root.appendChild(actions);
 
   const container = el('div', { class: 'stack' });
@@ -127,29 +133,29 @@ function renderImportView(root) {
 
   // Bulk actions row
   const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
-  const checkAll = el('vscode-checkbox');
+  const checkAll = el('input', { type: 'checkbox' });
   checkAll.addEventListener('change', () => {
     const checked = checkAll.checked;
     root.querySelectorAll('.item-check').forEach(cb => cb.checked = checked);
   });
   bulkRow.appendChild(checkAll);
+  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
   
-  const btnImportAll = el('vscode-button', { appearance: 'secondary' });
+  const btnImportAll = el('button', { class: 'secondary' });
   btnImportAll.textContent = 'Import Selected';
   btnImportAll.addEventListener('click', () => {
-    const selected = [];
+    const items = [];
     root.querySelectorAll('.item-check:checked').forEach(cb => {
       const idx = parseInt(cb.dataset.index);
-      if (state.discovered[idx]) selected.push(state.discovered[idx]);
+      if (!state.discovered[idx]) return;
+      const skill = state.discovered[idx];
+      const tagInput = document.getElementById(`tags-${skill.md5}`);
+      const tags = tagInput ? parseTags(tagInput.value) : [];
+      items.push({ skill, tags });
     });
-    if (selected.length === 0) return;
-    // Sequential import or batch? For now sequential messages
-    selected.forEach(skill => {
-        // Find tags input for this item
-        const tagInput = document.getElementById(`tags-${skill.md5}`);
-        const tags = tagInput ? parseTags(tagInput.value) : [];
-        vscode.postMessage({ type: 'importSkill', skill, tags });
-    });
+    if (items.length === 0) return;
+    // Use batch import
+    vscode.postMessage({ type: 'batchImportSkills', items });
   });
   bulkRow.appendChild(btnImportAll);
   container.appendChild(bulkRow);
@@ -162,13 +168,13 @@ function renderImportView(root) {
     const item = el('div', { class: 'skill-item' });
     // Click to toggle checkbox
     item.addEventListener('click', (e) => {
-      if (e.target.tagName.toLowerCase().includes('input') || e.target.tagName.toLowerCase().includes('button')) return;
+      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
       const cb = item.querySelector('.item-check');
       cb.checked = !cb.checked;
     });
 
     const header = el('div', { class: 'row' });
-    const cb = el('vscode-checkbox', { class: 'item-check', 'data-index': index });
+    const cb = el('input', { type: 'checkbox', class: 'item-check', 'data-index': index });
     header.appendChild(cb);
     header.appendChild(el('div', { class: 'skill-title', text: skill.name }));
     item.appendChild(header);
@@ -177,24 +183,24 @@ function renderImportView(root) {
 
     const meta = el('div', { class: 'skill-meta' });
     if (skill.isRemote) {
-      meta.appendChild(el('vscode-badge', { text: 'GitHub' }));
+      meta.appendChild(el('span', { class: 'badge badge-remote', text: 'GitHub' }));
     }
     if (importedByMd5) {
-      meta.appendChild(el('vscode-badge', { text: 'Imported' }));
+      meta.appendChild(el('span', { class: 'badge', text: 'Imported' }));
     } else if (nameConflict) {
-      meta.appendChild(el('vscode-badge', { text: 'Name conflict' }));
+      meta.appendChild(el('span', { class: 'badge', text: 'Name conflict' }));
     }
     item.appendChild(meta);
 
     const row = el('div', { class: 'row' });
-    const tagsField = el('vscode-text-field', { placeholder: 'tag1, tag2', class: 'grow', id: `tags-${skill.md5}` });
+    const tagsField = el('input', { type: 'text', placeholder: 'tag1, tag2', class: 'grow', id: `tags-${skill.md5}` });
     tagsField.value = importedByMd5?.tags?.join(', ') || '';
     row.appendChild(tagsField);
 
-    const importBtn = el('vscode-button', { appearance: importedByMd5 || nameConflict ? 'secondary' : 'primary' });
+    const importBtn = el('button', { class: importedByMd5 || nameConflict ? 'secondary' : 'primary' });
     importBtn.textContent = importedByMd5 ? 'Re-import' : nameConflict ? 'Overwrite' : 'Import';
     importBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'importSkill', skill, tags: parseTags(tagsField.value) });
+      vscode.postMessage({ type: 'importSkill', skill, tags: parseTags(tagsField.value), isSingle: true });
     });
     row.appendChild(importBtn);
     item.appendChild(row);
@@ -212,22 +218,39 @@ function renderMySkillsView(root) {
     return;
   }
 
+  // Search bar
+  const searchRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const searchInput = el('input', { type: 'text', placeholder: 'Search skills...', class: 'grow', id: 'search-my-skills' });
+  searchInput.addEventListener('input', () => {
+    const term = searchInput.value.toLowerCase();
+    const items = container.querySelectorAll('.skill-item');
+    items.forEach((item) => {
+      const originalIdx = parseInt(item.dataset.originalIndex || '0');
+      const skill = state.imported[originalIdx];
+      if (!skill) return;
+      const matches = !term || 
+        skill.name.toLowerCase().includes(term) ||
+        (skill.description || '').toLowerCase().includes(term) ||
+        (skill.tags || []).some(t => t.toLowerCase().includes(term));
+      item.style.display = matches ? 'block' : 'none';
+    });
+  });
+  searchRow.appendChild(searchInput);
+  container.appendChild(searchRow);
+
   // Bulk actions
   const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
-  const checkAll = el('vscode-checkbox');
+  const checkAll = el('input', { type: 'checkbox' });
   checkAll.addEventListener('change', () => {
     const checked = checkAll.checked;
     root.querySelectorAll('.item-check').forEach(cb => {
-        cb.checked = checked;
-        // Also trigger selection logic
-        const item = cb.closest('.skill-item');
-        if (checked) item.classList.add('selected');
-        else item.classList.remove('selected');
+      cb.checked = checked;
     });
   });
   bulkRow.appendChild(checkAll);
+  bulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
   
-  const btnDeleteAll = el('vscode-button', { appearance: 'secondary' });
+  const btnDeleteAll = el('button', { class: 'secondary' });
   btnDeleteAll.textContent = 'Delete Selected';
   btnDeleteAll.addEventListener('click', () => {
     const selectedIds = [];
@@ -236,15 +259,14 @@ function renderMySkillsView(root) {
       if (skillId) selectedIds.push(skillId);
     });
     if (selectedIds.length === 0) return;
-    if (confirm(`Delete ${selectedIds.length} skills?`)) {
-        // Send batch delete message - backend will handle sequentially
-        vscode.postMessage({ type: 'batchDeleteSkills', ids: selectedIds });
+    if (confirm(`Delete ${selectedIds.length} skill(s)?`)) {
+      vscode.postMessage({ type: 'batchDeleteSkills', ids: selectedIds });
     }
   });
   bulkRow.appendChild(btnDeleteAll);
 
   // Create Preset from Selected button
-  const btnCreatePresetFromSelected = el('vscode-button', { appearance: 'secondary' });
+  const btnCreatePresetFromSelected = el('button', { class: 'secondary' });
   btnCreatePresetFromSelected.textContent = 'Create preset';
   btnCreatePresetFromSelected.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -264,11 +286,11 @@ function renderMySkillsView(root) {
     
     // Show inline input for preset name (insert after bulkRow)
     const overlay = el('div', { class: 'preset-name-overlay row', style: 'margin: 8px 0; background: var(--vscode-input-background); padding: 8px; border-radius: 4px;' });
-    const nameInput = el('vscode-text-field', { placeholder: 'Preset name', class: 'grow' });
-    const btnSave = el('vscode-button');
+    const nameInput = el('input', { type: 'text', placeholder: 'Preset name', class: 'grow' });
+    const btnSave = el('button', { class: 'primary' });
     btnSave.textContent = 'Create';
     btnSave.addEventListener('click', () => save());
-    const btnCancel = el('vscode-button', { appearance: 'secondary' });
+    const btnCancel = el('button', { class: 'secondary' });
     btnCancel.textContent = 'Cancel';
     btnCancel.addEventListener('click', () => {
       const overlayEl = container.querySelector('.preset-name-overlay');
@@ -298,26 +320,6 @@ function renderMySkillsView(root) {
   });
   bulkRow.appendChild(btnCreatePresetFromSelected);
   
-  // Search bar
-  const searchRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
-  const searchInput = el('vscode-text-field', { placeholder: 'Search skills...', class: 'grow', id: 'search-my-skills' });
-  searchInput.addEventListener('input', () => {
-    // Re-render just the filtered list using data-original-index
-    const term = searchInput.value.toLowerCase();
-    const items = container.querySelectorAll('.skill-item');
-    items.forEach((item) => {
-      const originalIdx = parseInt(item.dataset.originalIndex || '0');
-      const skill = state.imported[originalIdx];
-      if (!skill) return;
-      const matches = !term || 
-        skill.name.toLowerCase().includes(term) ||
-        (skill.description || '').toLowerCase().includes(term) ||
-        (skill.tags || []).some(t => t.toLowerCase().includes(term));
-      item.style.display = matches ? 'block' : 'none';
-    });
-  });
-  searchRow.appendChild(searchInput);
-  container.appendChild(searchRow);
   container.appendChild(bulkRow);
 
   // Render all items (search filter applied live via DOM style.display)
@@ -326,14 +328,15 @@ function renderMySkillsView(root) {
     
     // Header with checkbox and title
     const header = el('div', { class: 'row' });
-    const cb = el('vscode-checkbox', { class: 'item-check', 'data-skill-id': skill.id });
+    const cb = el('input', { type: 'checkbox', class: 'item-check', 'data-skill-id': skill.id });
+    cb.addEventListener('click', (e) => e.stopPropagation());
     header.appendChild(cb);
     header.appendChild(el('div', { class: 'skill-title', text: skill.name }));
     item.appendChild(header);
 
     // Click to select/toggle action bar
     item.addEventListener('click', (e) => {
-      if (e.target.tagName.toLowerCase().includes('input') || e.target.tagName.toLowerCase().includes('button') || e.target.tagName.toLowerCase().includes('vscode-')) return;
+      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
       // Toggle selection visual
       const isSelected = item.classList.contains('selected');
       // Deselect all others
@@ -362,9 +365,10 @@ function renderMySkillsView(root) {
     const descRow = el('div', { class: 'row' });
     const descText = el('div', { class: 'muted editable', text: skill.description || '(no description)' });
     descText.title = 'Click to edit description';
-    descText.addEventListener('click', () => {
+    descText.addEventListener('click', (e) => {
+        e.stopPropagation();
         descText.style.display = 'none';
-        const input = el('vscode-text-field', { value: skill.description || '' });
+        const input = el('input', { type: 'text', value: skill.description || '', class: 'grow' });
         input.addEventListener('blur', () => saveDesc());
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDesc(); });
         function saveDesc() {
@@ -385,8 +389,7 @@ function renderMySkillsView(root) {
     const tagsWrap = el('div', { class: 'skill-meta editable' });
     if (skill.tags && skill.tags.length > 0) {
         for (const t of skill.tags) {
-            const tag = el('vscode-tag');
-            tag.textContent = t;
+            const tag = el('span', { class: 'tag', text: t });
             tagsWrap.appendChild(tag);
         }
         tagsWrap.title = 'Click to edit tags';
@@ -397,9 +400,10 @@ function renderMySkillsView(root) {
         tagsWrap.textContent = '+ Add tags';
         tagsWrap.title = 'Click to add tags';
     }
-    tagsWrap.addEventListener('click', () => {
+    tagsWrap.addEventListener('click', (e) => {
+        e.stopPropagation();
         tagsWrap.style.display = 'none';
-        const input = el('vscode-text-field', { value: (skill.tags || []).join(', ') });
+        const input = el('input', { type: 'text', value: (skill.tags || []).join(', '), class: 'grow' });
         input.addEventListener('blur', () => saveTags());
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveTags(); });
         function saveTags() {
@@ -415,8 +419,7 @@ function renderMySkillsView(root) {
             if (newTags.length > 0) {
                 tagsWrap.className = 'skill-meta editable';
                 for (const t of newTags) {
-                    const tag = el('vscode-tag');
-                    tag.textContent = t;
+                    const tag = el('span', { class: 'tag', text: t });
                     tagsWrap.appendChild(tag);
                 }
             } else {
@@ -432,12 +435,12 @@ function renderMySkillsView(root) {
     // Action Bar (Hidden by default)
     const actions = el('div', { class: 'row action-bar', style: 'display:none; margin-top: 8px;' });
 
-    const addBtn = el('vscode-button');
+    const addBtn = el('button', { class: 'primary' });
     addBtn.textContent = 'Add to...';
     addBtn.addEventListener('click', () => vscode.postMessage({ type: 'addToWorkspace', id: skill.id }));
     actions.appendChild(addBtn);
 
-    const delBtn = el('vscode-button', { appearance: 'secondary' });
+    const delBtn = el('button', { class: 'secondary' });
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestDeleteSkill', id: skill.id }));
     actions.appendChild(delBtn);
@@ -458,7 +461,7 @@ function renderPresetsView(root) {
 
   // Search bar for presets
   const searchRow = el('div', { class: 'row' });
-  const searchInput = el('vscode-text-field', { placeholder: 'Search presets...', class: 'grow', id: 'search-presets' });
+  const searchInput = el('input', { type: 'text', placeholder: 'Search presets...', class: 'grow', id: 'search-presets' });
   searchInput.addEventListener('input', () => {
     const term = searchInput.value.toLowerCase();
     const items = container.querySelectorAll('.preset-item');
@@ -469,7 +472,7 @@ function renderPresetsView(root) {
   });
   searchRow.appendChild(searchInput);
   container.appendChild(searchRow);
-  container.appendChild(el('vscode-divider'));
+  container.appendChild(el('hr'));
 
   if (!state.presets.length) {
     container.appendChild(el('div', { class: 'empty muted', text: 'No presets yet. Go to My Skills to create one.' }));
@@ -481,7 +484,7 @@ function renderPresetsView(root) {
     
     // Click to select preset (toggle selection + show action buttons)
     block.addEventListener('click', (e) => {
-      if (e.target.tagName.toLowerCase().includes('input') || e.target.tagName.toLowerCase().includes('button') || e.target.tagName.toLowerCase().includes('vscode-')) return;
+      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
       const isSelected = block.classList.contains('selected');
       // Deselect all other presets
       root.querySelectorAll('.preset-item').forEach(i => {
@@ -507,7 +510,7 @@ function renderPresetsView(root) {
     nameText.addEventListener('click', (e) => {
       e.stopPropagation();
       nameText.style.display = 'none';
-      const input = el('vscode-text-field', { value: preset.name, class: 'grow' });
+      const input = el('input', { type: 'text', value: preset.name, class: 'grow' });
       let saved = false;
       input.addEventListener('blur', () => {
         if (!saved) {
@@ -548,14 +551,15 @@ function renderPresetsView(root) {
     } else {
       // Bulk actions for preset skills
       const presetBulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
-      const checkAllPreset = el('vscode-checkbox');
+      const checkAllPreset = el('input', { type: 'checkbox' });
       checkAllPreset.addEventListener('change', () => {
         const checked = checkAllPreset.checked;
         expanded.querySelectorAll('.preset-skill-check').forEach(cb => cb.checked = checked);
       });
       presetBulkRow.appendChild(checkAllPreset);
+      presetBulkRow.appendChild(el('span', { class: 'select-all-label', text: 'Select All' }));
       
-      const btnRemoveFromPreset = el('vscode-button', { appearance: 'secondary' });
+      const btnRemoveFromPreset = el('button', { class: 'secondary' });
       btnRemoveFromPreset.textContent = 'Remove from preset';
       btnRemoveFromPreset.addEventListener('click', () => {
         const selectedIds = [];
@@ -564,7 +568,7 @@ function renderPresetsView(root) {
           if (skillId) selectedIds.push(skillId);
         });
         if (selectedIds.length === 0) return;
-        if (confirm(`Remove ${selectedIds.length} skills from this preset?`)) {
+        if (confirm(`Remove ${selectedIds.length} skill(s) from this preset?`)) {
           const next = { ...preset, skillIds: (preset.skillIds || []).filter(id => !selectedIds.includes(id)) };
           vscode.postMessage({ type: 'updatePreset', preset: next });
         }
@@ -578,8 +582,7 @@ function renderPresetsView(root) {
     
     // Header with checkbox
     const cardHeader = el('div', { class: 'row' });
-    const cb = el('vscode-checkbox', { class: 'preset-skill-check', 'data-skill-id': skill.id });
-    cb.setAttribute('data-skill-id', skill.id);
+    const cb = el('input', { type: 'checkbox', class: 'preset-skill-check', 'data-skill-id': skill.id });
         cardHeader.appendChild(cb);
         cardHeader.appendChild(el('div', { class: 'skill-title-small', text: skill.name }));
         skillCard.appendChild(cardHeader);
@@ -590,7 +593,7 @@ function renderPresetsView(root) {
         descText.addEventListener('click', (e) => {
           e.stopPropagation();
           descText.style.display = 'none';
-          const input = el('vscode-text-field', { value: skill.description || '', class: 'grow' });
+          const input = el('input', { type: 'text', value: skill.description || '', class: 'grow' });
           input.addEventListener('blur', () => saveDesc());
           input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveDesc(); });
           function saveDesc() {
@@ -610,8 +613,7 @@ function renderPresetsView(root) {
         const tagsWrap = el('div', { class: 'skill-meta editable' });
         if (skill.tags && skill.tags.length > 0) {
           for (const t of skill.tags) {
-            const tag = el('vscode-tag');
-            tag.textContent = t;
+            const tag = el('span', { class: 'tag', text: t });
             tagsWrap.appendChild(tag);
           }
         } else {
@@ -622,7 +624,7 @@ function renderPresetsView(root) {
         tagsWrap.addEventListener('click', (e) => {
           e.stopPropagation();
           tagsWrap.style.display = 'none';
-          const input = el('vscode-text-field', { value: (skill.tags || []).join(', '), class: 'grow' });
+          const input = el('input', { type: 'text', value: (skill.tags || []).join(', '), class: 'grow' });
           input.addEventListener('blur', () => saveTags());
           input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveTags(); });
           function saveTags() {
@@ -636,8 +638,7 @@ function renderPresetsView(root) {
             if (newTags.length > 0) {
               tagsWrap.className = 'skill-meta editable';
               for (const t of newTags) {
-                const tag = el('vscode-tag');
-                tag.textContent = t;
+                const tag = el('span', { class: 'tag', text: t });
                 tagsWrap.appendChild(tag);
               }
             } else {
@@ -658,7 +659,7 @@ function renderPresetsView(root) {
     // Preset-level Actions (Hidden by default, show when selected)
     const actions = el('div', { class: 'row preset-actions', style: 'display:none; margin-top:8px;' });
     
-    const btnEditName = el('vscode-button', { appearance: 'secondary' });
+    const btnEditName = el('button', { class: 'secondary' });
     btnEditName.textContent = 'Edit name';
     btnEditName.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -666,7 +667,7 @@ function renderPresetsView(root) {
     });
     actions.appendChild(btnEditName);
 
-    const btnEditSkills = el('vscode-button', { appearance: 'secondary' });
+    const btnEditSkills = el('button', { class: 'secondary' });
     btnEditSkills.textContent = 'Edit skills';
     btnEditSkills.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -677,17 +678,17 @@ function renderPresetsView(root) {
     });
     actions.appendChild(btnEditSkills);
 
-    const applyMerge = el('vscode-button');
+    const applyMerge = el('button', { class: 'primary' });
     applyMerge.textContent = 'Apply (Merge)';
     applyMerge.addEventListener('click', () => vscode.postMessage({ type: 'applyPreset', id: preset.id, mode: 'merge' }));
     actions.appendChild(applyMerge);
 
-    const applyReplace = el('vscode-button', { appearance: 'secondary' });
+    const applyReplace = el('button', { class: 'secondary' });
     applyReplace.textContent = 'Apply (Replace)';
     applyReplace.addEventListener('click', () => vscode.postMessage({ type: 'applyPreset', id: preset.id, mode: 'replace' }));
     actions.appendChild(applyReplace);
 
-    const del = el('vscode-button', { appearance: 'secondary' });
+    const del = el('button', { class: 'secondary' });
     del.textContent = 'Delete';
     del.addEventListener('click', () => vscode.postMessage({ type: 'requestDeletePreset', id: preset.id }));
     actions.appendChild(del);
@@ -703,7 +704,7 @@ function renderSettingsView(root) {
 
   const row1 = el('div', { class: 'stack' });
   const label1 = el('div', { text: 'Default Export Path' });
-  const field1 = el('vscode-text-field', { value: state.defaultExportPath || '.claude/skills/', class: 'grow' });
+  const field1 = el('input', { type: 'text', value: state.defaultExportPath || '.claude/skills/', class: 'grow' });
   const help1 = el('div', { class: 'muted', text: 'Relative to the chosen folder.' });
   row1.appendChild(label1);
   row1.appendChild(field1);
@@ -712,14 +713,14 @@ function renderSettingsView(root) {
 
   const row2 = el('div', { class: 'stack' });
   const label2 = el('div', { text: 'Storage Path' });
-  const field2 = el('vscode-text-field', { value: state.storagePath || '', class: 'grow', placeholder: '(empty = default profile storage)' });
+  const field2 = el('input', { type: 'text', value: state.storagePath || '', class: 'grow', placeholder: '(empty = default profile storage)' });
   const help2 = el('div', { class: 'muted', text: 'Storage path for imported skills & presets.' });
   row2.appendChild(label2);
   row2.appendChild(field2);
   row2.appendChild(help2);
   container.appendChild(row2);
 
-  const btnSave = el('vscode-button');
+  const btnSave = el('button', { class: 'primary' });
   btnSave.textContent = 'Save Settings';
   btnSave.addEventListener('click', () => {
       vscode.postMessage({ type: 'updateSettings', defaultExportPath: field1.value, storagePath: field2.value });
