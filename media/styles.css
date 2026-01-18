@@ -87,7 +87,7 @@ body {
 
 .editable {
   cursor: pointer;
-  text-decoration: underline dotted;
+  text-decoration: none;
 }
 
 .editable:hover {
@@ -247,6 +247,20 @@ input[type="search"] {
   padding: 6px 10px;
   font-size: 13px;
   border-radius: 2px;
+}
+
+select {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  padding: 5px;
+  font-size: 13px;
+  font-family: var(--vscode-font-family);
+  border-radius: 2px;
+}
+
+select:focus {
+  outline: 1px solid var(--vscode-focusBorder);
 }
 
 input[type="text"]:focus,
