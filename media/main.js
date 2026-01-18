@@ -304,7 +304,7 @@ function renderImportView(root) {
   }
 
   // Bulk actions row
-  const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const bulkRow = el('div', { class: 'row' });
   const checkAll = el('input', { type: 'checkbox' });
   checkAll.addEventListener('change', () => {
     const checked = checkAll.checked;
@@ -393,7 +393,7 @@ function renderMySkillsView(root) {
   }
 
   // Search bar
-  const searchRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const searchRow = el('div', { class: 'row' });
   const searchInput = el('input', { type: 'text', placeholder: 'Search skills...', class: 'grow', id: 'search-my-skills' });
   function applyMySkillsFilters() {
     const term = searchInput.value.toLowerCase();
@@ -416,7 +416,7 @@ function renderMySkillsView(root) {
   container.appendChild(searchRow);
 
   // Tag filter
-  const tagRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const tagRow = el('div', { class: 'row' });
   tagRow.appendChild(el('span', { text: 'Tag' }));
   const tagSelect = el('select', { class: 'grow' });
   const uniqueTags = Array.from(new Set(
@@ -438,7 +438,7 @@ function renderMySkillsView(root) {
   container.appendChild(tagRow);
 
   // Bulk actions
-  const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const bulkRow = el('div', { class: 'row' });
   const checkAll = el('input', { type: 'checkbox' });
   checkAll.addEventListener('change', () => {
     const checked = checkAll.checked;
@@ -622,7 +622,7 @@ function renderPresetsView(root) {
   container.appendChild(searchRow);
   
   // Bulk export row
-  const bulkRow = el('div', { class: 'row', style: 'margin-bottom: 8px;' });
+  const bulkRow = el('div', { class: 'row' });
   const checkAll = el('input', { type: 'checkbox' });
   checkAll.addEventListener('change', () => {
     const checked = checkAll.checked;
