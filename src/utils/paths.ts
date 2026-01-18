@@ -3,7 +3,10 @@ import * as os from 'os';
 
 export function resolvePath(filePath: string): string {
   if (filePath.startsWith('~')) {
-    return path.join(os.homedir(), filePath.slice(1));
+    const home = os.homedir();
+    // Handle both / and \ separators after ~
+    const relativePath = filePath.slice(1).replace(/^[\\\/]/, '');
+    return path.join(home, relativePath);
   }
   return path.resolve(filePath);
 }
@@ -32,6 +35,9 @@ export const GLOBAL_SKILL_PATHS = [
   '~/.config/opencode/skill/',
   '~/.codex/skills/',
   '/etc/codex/skills/',
+  // Windows specific paths
+  '~/AppData/Roaming/OpenCode/skill/',
+  '~/AppData/Roaming/alacritty/', // Example of standard location usage, though doubtful for skills
 ];
 
 export const WORKSPACE_SKILL_PATHS = [
