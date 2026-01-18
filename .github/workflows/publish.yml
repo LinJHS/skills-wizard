@@ -62,11 +62,11 @@ jobs:
       - name: Update version in package.json
         run: |
           NEW_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          npm version $NEW_VERSION --no-git-tag-version
+          npm pkg set version=$NEW_VERSION
 
       # 打包生成 .vsix 文件（供 GitHub Release 使用）
       - name: Build VSIX
-        run: npx vsce package -o extension.vsix
+        run: pnpm exec vsce package -o extension.vsix
 
       # 创建 GitHub Release 并上传 .vsix
       - name: Create GitHub Release
@@ -77,6 +77,6 @@ jobs:
 
       # 发布到 VS Code Marketplace
       - name: Publish to Marketplace
-        run: npx vsce publish --packagePath extension.vsix
+        run: pnpm exec vsce publish --packagePath extension.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
