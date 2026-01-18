@@ -317,16 +317,7 @@ export function registerCommands(
         // 2. Try to get discovered skill (for GitHub links)
         const discovered = importProvider.getSkill(skillId);
         if (discovered && discovered.isRemote && discovered.path) {
-           // It's a GitHub API URL. Open it in browser (convert to HTML if possible)
-           const webUrl = convertGitHubApiUrlToHtml(discovered.path, false); // false = not specific file? Discovered path is Directory usually.
-           // However, openSkill usually implies Source File. For remote, maybe the dir?
-           // Or the SKILL.md in that dir?
-           // Discovered path is the dir.
-           
-           // If user wants "Open Source File" for GitHub, they likely mean the SKILL.md online or the folder.
-           // Let's default to folder for "Source File" if it's a dir, or SKILL.md if we can guess.
-           // Actually, let's open the SKILL.md blob if we can.
-           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path + '/SKILL.md', true);
+           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path, true, 'SKILL.md');
            await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
            return;
         } else if (discovered && !discovered.isRemote) {
