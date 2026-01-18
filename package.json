@@ -3,6 +3,7 @@
   "displayName": "Skills Wizard",
   "description": "Manipulate your Agent Skills, One-Stop, like Dark Magic.",
   "version": "1.0.0",
+  "publisher": "LinJHS",
   "engines": {
     "vscode": "^1.108.1"
   },
