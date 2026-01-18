@@ -664,11 +664,11 @@ export class SkillManager {
       await this.saveConfig();
   }
 
-  private getDefaultExportPath(): string {
+  protected getDefaultExportPath(): string {
       return vscode.workspace.getConfiguration('skillsWizard').get('defaultExportPath') || '.claude/skills/';
   }
 
-  private async pickTargetRootFolder(): Promise<string | undefined> {
+  protected async pickTargetRootFolder(): Promise<string | undefined> {
     // Prefer workspace folder (if any).
     const picked = await vscode.window.showWorkspaceFolderPick();
     if (picked) {
