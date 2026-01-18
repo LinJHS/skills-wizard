@@ -73,7 +73,7 @@ jobs:
       # 打包生成 .vsix 文件（供 GitHub Release 使用）
       # Skipped dependencies check because pnpm structure confuses npm list
       - name: Build VSIX
-        run: npx vsce package --no-dependencies --no-prepublish -o extension.vsix
+        run: npx @vscode/vsce package --no-dependencies --no-prepublish -o extension.vsix
 
       # 创建 GitHub Release 并上传 .vsix
       - name: Create GitHub Release
@@ -84,6 +84,6 @@ jobs:
 
       # 发布到 VS Code Marketplace
       - name: Publish to Marketplace
-        run: npx vsce publish --packagePath extension.vsix
+        run: npx @vscode/vsce publish --packagePath extension.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
