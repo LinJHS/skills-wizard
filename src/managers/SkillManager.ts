@@ -231,7 +231,7 @@ export class SkillManager {
                      const fileDescription = await this.readSkillDescriptionFromFile(skillMdPath);
                      imported.push({
                          id: md5,
-                         name: entry.name,
+                         name: meta.customName ?? entry.name,
                          path: skillPath,
                          description: meta.customDescription ?? fileDescription,
                          tags: meta.tags || [],
@@ -662,6 +662,19 @@ export class SkillManager {
       await this.ensureReady();
       this.config.presets = this.config.presets.filter(p => p.id !== presetId);
       await this.saveConfig();
+  }
+
+  public async removeSkillsFromPreset(presetId: string, skillIds: string[]) {
+      await this.ensureReady();
+      const preset = this.config.presets.find(p => p.id === presetId);
+      if (!preset) {
+        return;
+      }
+      const next: Preset = {
+        ...preset,
+        skillIds: (preset.skillIds || []).filter(id => !skillIds.includes(id))
+      };
+      await this.savePreset(next);
   }
 
   protected getDefaultExportPath(): string {

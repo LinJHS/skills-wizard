@@ -76,6 +76,134 @@ function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
+function createTagEditButton(skill, actions, restoreActions) {
+  const tagsBtn = el('button', { class: 'secondary' });
+  tagsBtn.textContent = (skill.tags && skill.tags.length > 0) ? 'Edit tags' : 'Add tags';
+  tagsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const currentTags = (skill.tags || []).join(', ');
+    const input = el('input', { type: 'text', value: currentTags, placeholder: 'tag1, tag2', class: 'grow' });
+    const saveBtn = el('button', { class: 'primary' });
+    saveBtn.textContent = 'Save';
+    const cancelBtn = el('button', { class: 'secondary' });
+    cancelBtn.textContent = 'Cancel';
+
+    clear(actions);
+    actions.appendChild(input);
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    input.focus();
+
+    function saveTags() {
+      const newTags = parseTags(input.value);
+      if (JSON.stringify(newTags) !== JSON.stringify(skill.tags || [])) {
+        vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, tags: newTags });
+      }
+    }
+
+    function restore() {
+      clear(actions);
+      restoreActions();
+    }
+
+    saveBtn.addEventListener('click', () => { saveTags(); restore(); });
+    cancelBtn.addEventListener('click', restore);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { saveTags(); restore(); }
+      if (ev.key === 'Escape') restore();
+    });
+  });
+  return tagsBtn;
+}
+
+function createSkillCard(skill, options = {}) {
+  const {
+    className = 'skill-item',
+    nameClass = 'skill-title editable',
+    checkboxClass,
+    onCardClick,
+    showActions = true,
+    actionBarClass = 'row action-bar',
+    actionBarStyle,
+  } = options;
+
+  const card = el('div', { class: className });
+  if (typeof onCardClick === 'function') {
+    card.addEventListener('click', onCardClick);
+  }
+
+  const header = el('div', { class: 'row' });
+  let checkbox;
+  if (checkboxClass) {
+    checkbox = el('input', { type: 'checkbox', class: checkboxClass, 'data-skill-id': skill.id });
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    header.appendChild(checkbox);
+  }
+
+  const nameEl = el('div', { class: nameClass, text: skill.name });
+  nameEl.title = 'Click to edit name';
+  nameEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    nameEl.style.display = 'none';
+    const input = el('input', { type: 'text', value: skill.name, class: 'grow' });
+    input.addEventListener('blur', () => saveName());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveName(); });
+    function saveName() {
+      const newName = input.value.trim();
+      if (newName && newName !== skill.name) {
+        vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, customName: newName });
+      }
+      header.removeChild(input);
+      nameEl.textContent = newName || skill.name;
+      nameEl.style.display = 'block';
+    }
+    header.appendChild(input);
+    input.focus();
+  });
+  header.appendChild(nameEl);
+  card.appendChild(header);
+
+  const descRow = el('div', { class: 'row' });
+  const descText = el('div', { class: 'muted editable', text: skill.description || '(no description)' });
+  descText.title = 'Click to edit description';
+  descText.addEventListener('click', (e) => {
+    e.stopPropagation();
+    descText.style.display = 'none';
+    const input = el('input', { type: 'text', value: skill.description || '', class: 'grow' });
+    input.addEventListener('blur', () => saveDesc());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDesc(); });
+    function saveDesc() {
+      if (input.value !== (skill.description || '')) {
+        vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, customDescription: input.value });
+      }
+      descRow.removeChild(input);
+      descText.textContent = input.value || '(no description)';
+      descText.style.display = 'block';
+    }
+    descRow.appendChild(input);
+    input.focus();
+  });
+  descRow.appendChild(descText);
+  card.appendChild(descRow);
+
+  if (skill.tags && skill.tags.length > 0) {
+    const tagsWrap = el('div', { class: 'skill-meta' });
+    for (const t of skill.tags) {
+      const tag = el('span', { class: 'tag', text: t });
+      tagsWrap.appendChild(tag);
+    }
+    card.appendChild(tagsWrap);
+  }
+
+  let actions;
+  if (showActions) {
+    actions = el('div', { class: actionBarClass, style: actionBarStyle });
+    card.appendChild(actions);
+  }
+
+  return { card, actions, checkbox };
+}
+
 function renderAll() {
   const viewType = getViewType();
   const root = document.getElementById('app-root');
@@ -154,8 +282,8 @@ function renderImportView(root) {
       items.push({ skill, tags });
     });
     if (items.length === 0) return;
-    // Use batch import
-    vscode.postMessage({ type: 'batchImportSkills', items });
+    // Use batch import and show count
+    vscode.postMessage({ type: 'batchImportSkills', items, count: items.length });
   });
   bulkRow.appendChild(btnImportAll);
   container.appendChild(bulkRow);
@@ -255,13 +383,14 @@ function renderMySkillsView(root) {
   btnDeleteAll.addEventListener('click', () => {
     const selectedIds = [];
     root.querySelectorAll('.item-check:checked').forEach(cb => {
-      const skillId = cb.getAttribute('data-skill-id');
+      const skillId = cb.dataset.skillId;
       if (skillId) selectedIds.push(skillId);
     });
-    if (selectedIds.length === 0) return;
-    if (confirm(`Delete ${selectedIds.length} skill(s)?`)) {
-      vscode.postMessage({ type: 'batchDeleteSkills', ids: selectedIds });
+    if (selectedIds.length === 0) {
+      alert('Please select at least one skill to delete.');
+      return;
     }
+    vscode.postMessage({ type: 'requestBatchDeleteSkills', ids: selectedIds });
   });
   bulkRow.appendChild(btnDeleteAll);
 
@@ -272,7 +401,7 @@ function renderMySkillsView(root) {
     e.stopPropagation();
     const selectedIds = [];
     root.querySelectorAll('.item-check:checked').forEach(cb => {
-      const skillId = cb.getAttribute('data-skill-id');
+      const skillId = cb.dataset.skillId;
       if (skillId) selectedIds.push(skillId);
     });
     if (selectedIds.length === 0) {
@@ -324,128 +453,52 @@ function renderMySkillsView(root) {
 
   // Render all items (search filter applied live via DOM style.display)
   state.imported.forEach((skill, originalIndex) => {
-    const item = el('div', { class: 'skill-item', 'data-skill-id': skill.id, 'data-original-index': String(originalIndex) });
-    
-    // Header with checkbox and title
-    const header = el('div', { class: 'row' });
-    const cb = el('input', { type: 'checkbox', class: 'item-check', 'data-skill-id': skill.id });
-    cb.addEventListener('click', (e) => e.stopPropagation());
-    header.appendChild(cb);
-    header.appendChild(el('div', { class: 'skill-title', text: skill.name }));
-    item.appendChild(header);
+    const { card: item, actions, checkbox: cb } = createSkillCard(skill, {
+      className: 'skill-item',
+      checkboxClass: 'item-check',
+      actionBarStyle: 'display:none; margin-top: 8px;'
+    });
+    item.dataset.skillId = skill.id;
+    item.dataset.originalIndex = String(originalIndex);
 
     // Click to select/toggle action bar
     item.addEventListener('click', (e) => {
       if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
-      // Toggle selection visual
       const isSelected = item.classList.contains('selected');
-      // Deselect all others
       root.querySelectorAll('.skill-item').forEach(i => {
-          i.classList.remove('selected');
-          const ab = i.querySelector('.action-bar');
-          if (ab) ab.style.display = 'none';
+        i.classList.remove('selected');
+        const ab = i.querySelector('.action-bar');
+        if (ab) ab.style.display = 'none';
       });
-      
       if (!isSelected) {
-          item.classList.add('selected');
-          const ab = item.querySelector('.action-bar');
-          if (ab) ab.style.display = 'flex';
-          // Show add-tags placeholder when selected
-          const addTagsPlaceholder = item.querySelector('.add-tags-placeholder');
-          if (addTagsPlaceholder) addTagsPlaceholder.style.display = 'flex';
-          cb.checked = true;
+        item.classList.add('selected');
+        if (actions) actions.style.display = 'flex';
+        if (cb) cb.checked = true;
       } else {
-          const addTagsPlaceholder = item.querySelector('.add-tags-placeholder');
-          if (addTagsPlaceholder) addTagsPlaceholder.style.display = 'none';
-          cb.checked = false;
+        if (actions) actions.style.display = 'none';
+        if (cb) cb.checked = false;
       }
     });
-
-    // Description (Inline Edit)
-    const descRow = el('div', { class: 'row' });
-    const descText = el('div', { class: 'muted editable', text: skill.description || '(no description)' });
-    descText.title = 'Click to edit description';
-    descText.addEventListener('click', (e) => {
-        e.stopPropagation();
-        descText.style.display = 'none';
-        const input = el('input', { type: 'text', value: skill.description || '', class: 'grow' });
-        input.addEventListener('blur', () => saveDesc());
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDesc(); });
-        function saveDesc() {
-            if (input.value !== (skill.description || '')) {
-                vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, customDescription: input.value });
-            }
-            descRow.removeChild(input);
-            descText.textContent = input.value || '(no description)';
-            descText.style.display = 'block';
-        }
-        descRow.appendChild(input);
-        input.focus();
-    });
-    descRow.appendChild(descText);
-    item.appendChild(descRow);
-
-    // Tags (Inline Edit) - only show "Add tags" when item is selected
-    const tagsWrap = el('div', { class: 'skill-meta editable' });
-    if (skill.tags && skill.tags.length > 0) {
-        for (const t of skill.tags) {
-            const tag = el('span', { class: 'tag', text: t });
-            tagsWrap.appendChild(tag);
-        }
-        tagsWrap.title = 'Click to edit tags';
-    } else {
-        // Don't show "Add tags" unless selected
-        tagsWrap.className = 'skill-meta add-tags-placeholder';
-        tagsWrap.style.display = 'none'; // Hide by default
-        tagsWrap.textContent = '+ Add tags';
-        tagsWrap.title = 'Click to add tags';
-    }
-    tagsWrap.addEventListener('click', (e) => {
-        e.stopPropagation();
-        tagsWrap.style.display = 'none';
-        const input = el('input', { type: 'text', value: (skill.tags || []).join(', '), class: 'grow' });
-        input.addEventListener('blur', () => saveTags());
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveTags(); });
-        function saveTags() {
-            const newTags = parseTags(input.value);
-            // Simple check if changed
-            if (JSON.stringify(newTags) !== JSON.stringify(skill.tags || [])) {
-                vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, tags: newTags });
-            }
-            item.removeChild(input);
-            tagsWrap.style.display = 'flex'; // Restore flex
-            // Re-render handled by state update, but for instant feedback:
-            clear(tagsWrap);
-            if (newTags.length > 0) {
-                tagsWrap.className = 'skill-meta editable';
-                for (const t of newTags) {
-                    const tag = el('span', { class: 'tag', text: t });
-                    tagsWrap.appendChild(tag);
-                }
-            } else {
-                tagsWrap.textContent = '+ Add tags';
-                tagsWrap.className = 'skill-meta editable muted';
-            }
-        }
-        item.insertBefore(input, tagsWrap.nextSibling); // Insert after tagsWrap
-        input.focus();
-    });
-    item.appendChild(tagsWrap);
-
-    // Action Bar (Hidden by default)
-    const actions = el('div', { class: 'row action-bar', style: 'display:none; margin-top: 8px;' });
 
     const addBtn = el('button', { class: 'primary' });
     addBtn.textContent = 'Add to...';
     addBtn.addEventListener('click', () => vscode.postMessage({ type: 'addToWorkspace', id: skill.id }));
-    actions.appendChild(addBtn);
 
     const delBtn = el('button', { class: 'secondary' });
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestDeleteSkill', id: skill.id }));
-    actions.appendChild(delBtn);
 
-    item.appendChild(actions);
+    let tagsBtn;
+    const restoreActions = () => {
+      if (!actions) return;
+      actions.appendChild(addBtn);
+      if (tagsBtn) actions.appendChild(tagsBtn);
+      actions.appendChild(delBtn);
+    };
+
+    tagsBtn = createTagEditButton(skill, actions, restoreActions);
+    restoreActions();
+
     container.appendChild(item);
   });
 }
@@ -482,26 +535,6 @@ function renderPresetsView(root) {
   state.presets.forEach((preset, presetIdx) => {
     const block = el('div', { class: 'preset-item', 'data-preset-name': preset.name, 'data-preset-idx': String(presetIdx) });
     
-    // Click to select preset (toggle selection + show action buttons)
-    block.addEventListener('click', (e) => {
-      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button') return;
-      const isSelected = block.classList.contains('selected');
-      // Deselect all other presets
-      root.querySelectorAll('.preset-item').forEach(i => {
-        i.classList.remove('selected');
-        i.classList.remove('expanded');
-        const ab = i.querySelector('.preset-actions');
-        if (ab) ab.style.display = 'none';
-        const exp = i.querySelector('.preset-expanded');
-        if (exp) exp.style.display = 'none';
-      });
-      if (!isSelected) {
-        block.classList.add('selected');
-        const ab = block.querySelector('.preset-actions');
-        if (ab) ab.style.display = 'flex';
-      }
-    });
-
     // Header row: preset name (inline editable)
     const headerRow = el('div', { class: 'row' });
     const skillCount = (preset.skillIds || []).length;
@@ -539,6 +572,27 @@ function renderPresetsView(root) {
       setTimeout(() => input.focus(), 10);
     });
     headerRow.appendChild(nameText);
+    
+    // Click header row to select preset (toggle selection + show action buttons)
+    headerRow.addEventListener('click', (e) => {
+      if (e.target.tagName.toLowerCase() === 'input') return;
+      const isSelected = block.classList.contains('selected');
+      // Deselect all other presets
+      root.querySelectorAll('.preset-item').forEach(i => {
+        i.classList.remove('selected');
+        i.classList.remove('expanded');
+        const ab = i.querySelector('.preset-actions');
+        if (ab) ab.style.display = 'none';
+        const exp = i.querySelector('.preset-expanded');
+        if (exp) exp.style.display = 'none';
+      });
+      if (!isSelected) {
+        block.classList.add('selected');
+        const ab = block.querySelector('.preset-actions');
+        if (ab) ab.style.display = 'flex';
+      }
+    });
+    
     block.appendChild(headerRow);
 
     // Expanded section (hidden by default): shows full skill cards
@@ -561,95 +615,40 @@ function renderPresetsView(root) {
       
       const btnRemoveFromPreset = el('button', { class: 'secondary' });
       btnRemoveFromPreset.textContent = 'Remove from preset';
-      btnRemoveFromPreset.addEventListener('click', () => {
+      btnRemoveFromPreset.addEventListener('click', (e) => {
+        e.stopPropagation();
         const selectedIds = [];
         expanded.querySelectorAll('.preset-skill-check:checked').forEach(cb => {
-          const skillId = cb.getAttribute('data-skill-id');
+          const skillId = cb.dataset.skillId;
           if (skillId) selectedIds.push(skillId);
         });
-        if (selectedIds.length === 0) return;
-        if (confirm(`Remove ${selectedIds.length} skill(s) from this preset?`)) {
-          const next = { ...preset, skillIds: (preset.skillIds || []).filter(id => !selectedIds.includes(id)) };
-          vscode.postMessage({ type: 'updatePreset', preset: next });
+        if (selectedIds.length === 0) {
+          alert('Please select at least one skill to remove.');
+          return;
         }
+        vscode.postMessage({ type: 'requestRemoveFromPreset', presetId: preset.id, skillIds: selectedIds });
       });
       presetBulkRow.appendChild(btnRemoveFromPreset);
       expanded.appendChild(presetBulkRow);
 
       presetSkills.forEach(skill => {
-        const skillCard = el('div', { class: 'skill-card-mini' });
-    skillCard.addEventListener('click', (e) => e.stopPropagation());
-    
-    // Header with checkbox
-    const cardHeader = el('div', { class: 'row' });
-    const cb = el('input', { type: 'checkbox', class: 'preset-skill-check', 'data-skill-id': skill.id });
-        cardHeader.appendChild(cb);
-        cardHeader.appendChild(el('div', { class: 'skill-title-small', text: skill.name }));
-        skillCard.appendChild(cardHeader);
-        
-        // Description (Inline Edit) - globally synced
-        const descText = el('div', { class: 'muted editable', text: skill.description || '(no description)' });
-        descText.title = 'Click to edit (global)';
-        descText.addEventListener('click', (e) => {
-          e.stopPropagation();
-          descText.style.display = 'none';
-          const input = el('input', { type: 'text', value: skill.description || '', class: 'grow' });
-          input.addEventListener('blur', () => saveDesc());
-          input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveDesc(); });
-          function saveDesc() {
-            if (input.value !== (skill.description || '')) {
-              vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, customDescription: input.value });
-            }
-            skillCard.removeChild(input);
-            descText.textContent = input.value || '(no description)';
-            descText.style.display = 'block';
-          }
-          skillCard.insertBefore(input, descText.nextSibling);
-          input.focus();
+        const { card: skillCard, actions } = createSkillCard(skill, {
+          className: 'skill-card-mini',
+          nameClass: 'skill-title-small editable',
+          checkboxClass: 'preset-skill-check',
+          actionBarClass: 'row action-bar',
+          actionBarStyle: 'margin-top: 8px;'
         });
-        skillCard.appendChild(descText);
 
-        // Tags (Inline Edit) - globally synced
-        const tagsWrap = el('div', { class: 'skill-meta editable' });
-        if (skill.tags && skill.tags.length > 0) {
-          for (const t of skill.tags) {
-            const tag = el('span', { class: 'tag', text: t });
-            tagsWrap.appendChild(tag);
-          }
-        } else {
-          tagsWrap.textContent = '+ Add tags';
-          tagsWrap.className = 'skill-meta muted editable';
-        }
-        tagsWrap.title = 'Click to edit (global)';
-        tagsWrap.addEventListener('click', (e) => {
-          e.stopPropagation();
-          tagsWrap.style.display = 'none';
-          const input = el('input', { type: 'text', value: (skill.tags || []).join(', '), class: 'grow' });
-          input.addEventListener('blur', () => saveTags());
-          input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveTags(); });
-          function saveTags() {
-            const newTags = parseTags(input.value);
-            if (JSON.stringify(newTags) !== JSON.stringify(skill.tags || [])) {
-              vscode.postMessage({ type: 'updateSkillMetadata', id: skill.id, tags: newTags });
-            }
-            skillCard.removeChild(input);
-            tagsWrap.style.display = 'flex';
-            clear(tagsWrap);
-            if (newTags.length > 0) {
-              tagsWrap.className = 'skill-meta editable';
-              for (const t of newTags) {
-                const tag = el('span', { class: 'tag', text: t });
-                tagsWrap.appendChild(tag);
-              }
-            } else {
-              tagsWrap.textContent = '+ Add tags';
-              tagsWrap.className = 'skill-meta muted editable';
-            }
-          }
-          skillCard.insertBefore(input, tagsWrap.nextSibling);
-          input.focus();
-        });
-        skillCard.appendChild(tagsWrap);
+        skillCard.addEventListener('click', (e) => e.stopPropagation());
+
+        let tagsBtn;
+        const restoreActions = () => {
+          if (!actions) return;
+          if (tagsBtn) actions.appendChild(tagsBtn);
+        };
+        tagsBtn = createTagEditButton(skill, actions, restoreActions);
+        restoreActions();
 
         expanded.appendChild(skillCard);
       });
@@ -659,14 +658,6 @@ function renderPresetsView(root) {
     // Preset-level Actions (Hidden by default, show when selected)
     const actions = el('div', { class: 'row preset-actions', style: 'display:none; margin-top:8px;' });
     
-    const btnEditName = el('button', { class: 'secondary' });
-    btnEditName.textContent = 'Edit name';
-    btnEditName.addEventListener('click', (e) => {
-      e.stopPropagation();
-      nameText.click(); // Trigger inline edit
-    });
-    actions.appendChild(btnEditName);
-
     const btnEditSkills = el('button', { class: 'secondary' });
     btnEditSkills.textContent = 'Edit skills';
     btnEditSkills.addEventListener('click', (e) => {

@@ -154,6 +154,24 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             await this.refreshAll();
             break;
         }
+        case 'requestBatchDeleteSkills': {
+            if (!Array.isArray(data.ids) || data.ids.length === 0) {
+              break;
+            }
+            const res = await vscode.window.showWarningMessage(
+              `Delete ${data.ids.length} skill(s)?`,
+              { modal: true },
+              'Delete'
+            );
+            if (res === 'Delete') {
+              for (const id of data.ids) {
+                await this._skillManager.deleteSkill(id);
+              }
+              vscode.window.showInformationMessage(`Deleted ${data.ids.length} skills`);
+              await this.refreshAll();
+            }
+            break;
+        }
         case 'requestEditSkillTags': {
             // This is now mainly a fallback or invoked by logic, 
             // but for inline edit the JS might send direct updateSkillMetadata
@@ -227,6 +245,21 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
               vscode.window.showErrorMessage(e?.message || 'Failed to update preset');
             }
             break;
+        case 'requestRemoveFromPreset': {
+            if (!Array.isArray(data.skillIds) || data.skillIds.length === 0 || typeof data.presetId !== 'string') {
+              break;
+            }
+            const res = await vscode.window.showWarningMessage(
+              `Remove ${data.skillIds.length} skill(s) from this preset?`,
+              { modal: true },
+              'Remove'
+            );
+            if (res === 'Remove') {
+              await this._skillManager.removeSkillsFromPreset(data.presetId, data.skillIds);
+              await this.refreshAll();
+            }
+            break;
+        }
         case 'requestDeletePreset': {
             const res = await vscode.window.showWarningMessage(
               'Delete this preset?',
@@ -257,7 +290,11 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             await this.refresh();
             break;
         case 'updateSkillMetadata':
-            await this._skillManager.updateSkillMetadata(data.id, { tags: data.tags, customDescription: data.customDescription });
+            await this._skillManager.updateSkillMetadata(data.id, { 
+                tags: data.tags, 
+                customDescription: data.customDescription,
+                customName: data.customName
+            });
             await this.refreshAll();
             break;
       }
