@@ -9,5 +9,10 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.github/**
+out/test/**
+.npmrc
+pnpm-lock.yaml
+.vscode-test.mjs
 
 docs/
