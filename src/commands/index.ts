@@ -5,6 +5,7 @@ import { SkillManager } from '../managers/SkillManager';
 import { ImportTreeProvider, ImportTreeItem } from '../providers/ImportTreeProvider';
 import { MySkillsTreeProvider, MySkillTreeItem } from '../providers/MySkillsTreeProvider';
 import { PresetsTreeProvider, PresetTreeItem } from '../providers/PresetsTreeProvider';
+import { SettingsTreeProvider } from '../providers/SettingsTreeProvider';
 import { Preset } from '../models/types';
 
 export function registerCommands(
@@ -12,7 +13,8 @@ export function registerCommands(
   skillManager: SkillManager,
   importProvider: ImportTreeProvider,
   mySkillsProvider: MySkillsTreeProvider,
-  presetsProvider: PresetsTreeProvider
+  presetsProvider: PresetsTreeProvider,
+  settingsProvider: SettingsTreeProvider
 ): void {
   
   // Refresh all views
@@ -337,23 +339,128 @@ export function registerCommands(
   
   // Edit tags
   context.subscriptions.push(
-    vscode.commands.registerCommand('skillsWizard.editTags', async (item?: MySkillTreeItem) => {
-      if (!item?.skill) {
+    vscode.commands.registerCommand('skillsWizard.editTags', async (skillIdOrItem: string | MySkillTreeItem | any) => {
+      let skillId: string | undefined;
+      
+      if (typeof skillIdOrItem === 'string') {
+        skillId = skillIdOrItem;
+      } else if (skillIdOrItem?.skill) {
+        skillId = skillIdOrItem.skill.id;
+      }
+      
+      if (!skillId) {
         return;
       }
       
-      const current = item.skill.tags?.join(', ') || '';
+      const { imported } = await skillManager.scanForSkills();
+      const skill = imported.find(s => s.id === skillId);
+      if (!skill) {
+        return;
+      }
+      
+      const current = skill.tags?.join(', ') || '';
       const input = await vscode.window.showInputBox({
-        title: `Edit tags for "${item.skill.name}"`,
+        title: `Edit tags for "${skill.name}"`,
         prompt: 'Comma-separated tags',
         value: current
       });
       
       if (input !== undefined) {
         const tags = input.split(',').map(t => t.trim()).filter(Boolean);
-        await skillManager.updateSkillMetadata(item.skill.id, { tags });
-        await mySkillsProvider.loadSkills();
+        await skillManager.updateSkillMetadata(skillId, { tags });
+        await Promise.all([
+          mySkillsProvider.loadSkills(),
+          presetsProvider.loadPresets()
+        ]);
         vscode.window.showInformationMessage('Tags updated');
+      }
+    })
+  );
+  
+  // Edit skill name
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.editSkillName', async (skillIdOrItem: string | any) => {
+      let skillId: string | undefined;
+      
+      if (typeof skillIdOrItem === 'string') {
+        skillId = skillIdOrItem;
+      } else if (skillIdOrItem?.skill) {
+        skillId = skillIdOrItem.skill.id;
+      }
+      
+      if (!skillId) {
+        return;
+      }
+      
+      const { imported } = await skillManager.scanForSkills();
+      const skill = imported.find(s => s.id === skillId);
+      if (!skill) {
+        return;
+      }
+      
+      const input = await vscode.window.showInputBox({
+        title: 'Edit skill name',
+        prompt: 'Enter new name',
+        value: skill.name,
+        validateInput: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'Name cannot be empty';
+          }
+          return null;
+        }
+      });
+      
+      if (input && input !== skill.name) {
+        await skillManager.updateSkillName(skillId, input);
+        vscode.window.showInformationMessage('Skill name updated. Refreshing...');
+        // Wait a bit for file watcher to trigger, or force refresh
+        setTimeout(async () => {
+          await Promise.all([
+            mySkillsProvider.loadSkills(),
+            presetsProvider.loadPresets()
+          ]);
+        }, 600);
+      }
+    })
+  );
+  
+  // Edit skill description
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.editSkillDescription', async (skillIdOrItem: string | any) => {
+      let skillId: string | undefined;
+      
+      if (typeof skillIdOrItem === 'string') {
+        skillId = skillIdOrItem;
+      } else if (skillIdOrItem?.skill) {
+        skillId = skillIdOrItem.skill.id;
+      }
+      
+      if (!skillId) {
+        return;
+      }
+      
+      const { imported } = await skillManager.scanForSkills();
+      const skill = imported.find(s => s.id === skillId);
+      if (!skill) {
+        return;
+      }
+      
+      const input = await vscode.window.showInputBox({
+        title: 'Edit skill description',
+        prompt: 'Enter new description',
+        value: skill.description || ''
+      });
+      
+      if (input !== undefined && input !== skill.description) {
+        await skillManager.updateSkillDescription(skillId, input);
+        vscode.window.showInformationMessage('Skill description updated. Refreshing...');
+        // Wait a bit for file watcher to trigger, or force refresh
+        setTimeout(async () => {
+          await Promise.all([
+            mySkillsProvider.loadSkills(),
+            presetsProvider.loadPresets()
+          ]);
+        }, 600);
       }
     })
   );
@@ -436,9 +543,9 @@ export function registerCommands(
     })
   );
   
-  // Create preset
+  // Create preset (empty or with single skill from context menu)
   context.subscriptions.push(
-    vscode.commands.registerCommand('skillsWizard.createPreset', async () => {
+    vscode.commands.registerCommand('skillsWizard.createPreset', async (item?: MySkillTreeItem) => {
       const { imported } = await skillManager.scanForSkills();
       
       if (imported.length === 0) {
@@ -452,6 +559,10 @@ export function registerCommands(
           if (!value || value.trim().length === 0) {
             return 'Preset name cannot be empty';
           }
+          const presets = skillManager.getPresets();
+          if (presets.some(p => p.name.toLowerCase() === value.toLowerCase())) {
+            return 'A preset with this name already exists';
+          }
           return null;
         }
       });
@@ -461,39 +572,30 @@ export function registerCommands(
       }
       
       try {
+        // If called from a skill context menu, include that skill
+        const skillIds = item?.skill ? [item.skill.id] : [];
+        
         const newPreset: Preset = {
           id: Date.now().toString(),
           name,
-          skillIds: []
+          skillIds
         };
         
         await skillManager.savePreset(newPreset);
         await presetsProvider.loadPresets();
-        vscode.window.showInformationMessage(`Preset "${name}" created`);
-      } catch (e: any) {
-        const msg = e?.message || 'Failed to create preset';
-        if (msg.includes('already exists')) {
-          const res = await vscode.window.showWarningMessage(
-            `Preset "${name}" already exists. Overwrite it?`,
-            { modal: true },
-            'Overwrite'
-          );
-          if (res === 'Overwrite') {
-            await skillManager.savePreset({
-              id: Date.now().toString(),
-              name,
-              skillIds: []
-            }, { allowOverwrite: true });
-            await presetsProvider.loadPresets();
-          }
+        
+        if (skillIds.length > 0) {
+          vscode.window.showInformationMessage(`Preset "${name}" created with skill "${item!.skill!.name}"`);
         } else {
-          vscode.window.showErrorMessage(msg);
+          vscode.window.showInformationMessage(`Empty preset "${name}" created`);
         }
+      } catch (e: any) {
+        vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
       }
     })
   );
   
-  // Create preset from selection
+  // Create preset from multiple skills (checkbox selection)
   context.subscriptions.push(
     vscode.commands.registerCommand('skillsWizard.createPresetFromSelection', async () => {
       const { imported } = await skillManager.scanForSkills();
@@ -503,6 +605,7 @@ export function registerCommands(
         return;
       }
       
+      // First, let user select skills with checkboxes
       const selected = await vscode.window.showQuickPick(
         imported.map(s => ({
           label: s.name,
@@ -512,19 +615,25 @@ export function registerCommands(
         })),
         {
           canPickMany: true,
-          placeHolder: 'Select skills for the preset'
+          placeHolder: 'Select skills for the new preset (Space to check, Enter to confirm)'
         }
       );
       
       if (!selected || selected.length === 0) {
+        vscode.window.showWarningMessage('No skills selected');
         return;
       }
       
+      // Then ask for preset name
       const name = await vscode.window.showInputBox({
         prompt: 'Enter preset name',
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
             return 'Preset name cannot be empty';
+          }
+          const presets = skillManager.getPresets();
+          if (presets.some(p => p.name.toLowerCase() === value.toLowerCase())) {
+            return 'A preset with this name already exists';
           }
           return null;
         }
@@ -727,6 +836,475 @@ export function registerCommands(
       } catch (e: any) {
         vscode.window.showErrorMessage(e?.message || 'Failed to export preset zip');
       }
+    })
+  );
+  
+  // Export single skill to zip
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.exportSkillZip', async (item?: MySkillTreeItem) => {
+      if (!item?.skill) {
+        return;
+      }
+      
+      const uri = await vscode.window.showSaveDialog({
+        filters: { 'Zip Files': ['zip'] },
+        saveLabel: 'Export skill zip',
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), `skill-${item.skill.name}.zip`))
+      });
+      
+      if (!uri) {
+        return;
+      }
+      
+      try {
+        await skillManager.exportSkillsToZip([item.skill.id], uri.fsPath);
+        vscode.window.showInformationMessage('Skill exported to zip');
+      } catch (e: any) {
+        vscode.window.showErrorMessage(e?.message || 'Failed to export skill zip');
+      }
+    })
+  );
+  
+  // Export all presets to zip
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.exportAllPresetsZip', async () => {
+      const uri = await vscode.window.showSaveDialog({
+        filters: { 'Zip Files': ['zip'] },
+        saveLabel: 'Export all presets zip',
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), 'all-presets.zip'))
+      });
+      
+      if (!uri) {
+        return;
+      }
+      
+      try {
+        await skillManager.exportPresetsToZip('all', uri.fsPath);
+        vscode.window.showInformationMessage('All presets exported to zip');
+      } catch (e: any) {
+        vscode.window.showErrorMessage(e?.message || 'Failed to export all presets zip');
+      }
+    })
+  );
+  
+  // Update storage path
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.updateStoragePath', async () => {
+      const config = vscode.workspace.getConfiguration('skillsWizard');
+      const currentPath = config.get<string>('storagePath') || '';
+      
+      const input = await vscode.window.showInputBox({
+        prompt: 'Enter storage path (absolute path, leave empty for default)',
+        value: currentPath,
+        placeHolder: '~/.config/skills-wizard or leave empty for default'
+      });
+      
+      if (input !== undefined) {
+        await config.update('storagePath', input, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage('Storage path updated. Please reload the window for changes to take effect.');
+        settingsProvider.refresh();
+      }
+    })
+  );
+  
+  // Update default export path
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.updateDefaultExportPath', async () => {
+      const config = vscode.workspace.getConfiguration('skillsWizard');
+      const currentPath = config.get<string>('defaultExportPath') || '.claude/skills/';
+      
+      const input = await vscode.window.showInputBox({
+        prompt: 'Enter default export path (relative to workspace root)',
+        value: currentPath,
+        validateInput: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'Path cannot be empty';
+          }
+          return null;
+        }
+      });
+      
+      if (input !== undefined) {
+        await config.update('defaultExportPath', input, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage('Default export path updated');
+        settingsProvider.refresh();
+      }
+    })
+  );
+  
+  // Batch import skills
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.batchImportSkills', async () => {
+      await importProvider.loadSkills();
+      const { discovered, imported } = await skillManager.scanForSkills();
+      
+      if (discovered.length === 0) {
+        vscode.window.showWarningMessage('No skills found to import.');
+        return;
+      }
+      
+      const existingByName = new Map(imported.map(s => [s.name.trim().toLowerCase(), s]));
+      
+      const selected = await vscode.window.showQuickPick(
+        discovered.map(skill => {
+          const existing = existingByName.get(skill.name.trim().toLowerCase());
+          const isConflict = existing && existing.md5 !== skill.md5;
+          return {
+            label: skill.name,
+            description: skill.description || '',
+            detail: isConflict ? '⚠️ Will overwrite existing skill with different content' : skill.sourceLocation,
+            picked: false,
+            skill
+          };
+        }),
+        {
+          canPickMany: true,
+          placeHolder: 'Select skills to import (use Space to select, Enter to confirm)'
+        }
+      );
+      
+      if (!selected || selected.length === 0) {
+        return;
+      }
+      
+      const conflicts = selected.filter(s => {
+        const existing = existingByName.get(s.skill.name.trim().toLowerCase());
+        return existing && existing.md5 !== s.skill.md5;
+      });
+      
+      let allowOverwrite = true;
+      if (conflicts.length > 0) {
+        const res = await vscode.window.showWarningMessage(
+          `${conflicts.length} skill(s) will overwrite existing ones. Continue?`,
+          { modal: true },
+          'Continue',
+          'Cancel'
+        );
+        if (res !== 'Continue') {
+          return;
+        }
+      }
+      
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Importing ${selected.length} skills...`,
+        cancellable: false
+      }, async () => {
+        for (const item of selected) {
+          await skillManager.importSkill(item.skill);
+        }
+      });
+      
+      vscode.window.showInformationMessage(`Successfully imported ${selected.length} skills`);
+      
+      await Promise.all([
+        importProvider.loadSkills(),
+        mySkillsProvider.loadSkills()
+      ]);
+    })
+  );
+  
+  // Select all skills (conceptual - opens batch delete/export)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.selectAllSkills', async () => {
+      const { imported } = await skillManager.scanForSkills();
+      
+      if (imported.length === 0) {
+        vscode.window.showWarningMessage('No skills to select');
+        return;
+      }
+      
+      const action = await vscode.window.showQuickPick(
+        [
+          { label: 'Delete All', value: 'delete' as const },
+          { label: 'Export All to Zip', value: 'export' as const },
+          { label: 'Cancel', value: 'cancel' as const }
+        ],
+        { placeHolder: `Select action for all ${imported.length} skills` }
+      );
+      
+      if (!action || action.value === 'cancel') {
+        return;
+      }
+      
+      if (action.value === 'delete') {
+        const res = await vscode.window.showWarningMessage(
+          `Delete all ${imported.length} skills?`,
+          { modal: true },
+          'Delete All'
+        );
+        
+        if (res === 'Delete All') {
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Deleting ${imported.length} skills...`,
+            cancellable: false
+          }, async () => {
+            for (const skill of imported) {
+              await skillManager.deleteSkill(skill.id);
+            }
+          });
+          
+          await Promise.all([
+            mySkillsProvider.loadSkills(),
+            presetsProvider.loadPresets()
+          ]);
+          vscode.window.showInformationMessage(`Deleted ${imported.length} skills`);
+        }
+      } else if (action.value === 'export') {
+        const uri = await vscode.window.showSaveDialog({
+          filters: { 'Zip Files': ['zip'] },
+          saveLabel: 'Export all skills zip',
+          defaultUri: vscode.Uri.file(path.join(os.homedir(), 'all-skills.zip'))
+        });
+        
+        if (uri) {
+          try {
+            await skillManager.exportSkillsToZip(imported.map(s => s.id), uri.fsPath);
+            vscode.window.showInformationMessage(`Exported ${imported.length} skills to zip`);
+          } catch (e: any) {
+            vscode.window.showErrorMessage(e?.message || 'Failed to export skills');
+          }
+        }
+      }
+    })
+  );
+  
+  // Batch delete skills
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.batchDeleteSkills', async () => {
+      const { imported } = await skillManager.scanForSkills();
+      
+      if (imported.length === 0) {
+        vscode.window.showWarningMessage('No skills to delete');
+        return;
+      }
+      
+      const selected = await vscode.window.showQuickPick(
+        imported.map(s => ({
+          label: s.name,
+          description: s.description || '',
+          picked: false,
+          skill: s
+        })),
+        {
+          canPickMany: true,
+          placeHolder: 'Select skills to delete (use Space to select, Enter to confirm)'
+        }
+      );
+      
+      if (!selected || selected.length === 0) {
+        return;
+      }
+      
+      const res = await vscode.window.showWarningMessage(
+        `Delete ${selected.length} skill(s)?`,
+        { modal: true },
+        'Delete'
+      );
+      
+      if (res === 'Delete') {
+        await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: `Deleting ${selected.length} skills...`,
+          cancellable: false
+        }, async () => {
+          for (const item of selected) {
+            await skillManager.deleteSkill(item.skill.id);
+          }
+        });
+        
+        await Promise.all([
+          mySkillsProvider.loadSkills(),
+          presetsProvider.loadPresets()
+        ]);
+        vscode.window.showInformationMessage(`Deleted ${selected.length} skills`);
+      }
+    })
+  );
+  
+  // Batch export skills
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.batchExportSkills', async () => {
+      const { imported } = await skillManager.scanForSkills();
+      
+      if (imported.length === 0) {
+        vscode.window.showWarningMessage('No skills to export');
+        return;
+      }
+      
+      const selected = await vscode.window.showQuickPick(
+        imported.map(s => ({
+          label: s.name,
+          description: s.description || '',
+          picked: false,
+          skill: s
+        })),
+        {
+          canPickMany: true,
+          placeHolder: 'Select skills to export (use Space to select, Enter to confirm)'
+        }
+      );
+      
+      if (!selected || selected.length === 0) {
+        return;
+      }
+      
+      const uri = await vscode.window.showSaveDialog({
+        filters: { 'Zip Files': ['zip'] },
+        saveLabel: 'Export skills zip',
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), `skills-${selected.length}.zip`))
+      });
+      
+      if (!uri) {
+        return;
+      }
+      
+      try {
+        await skillManager.exportSkillsToZip(selected.map(s => s.skill.id), uri.fsPath);
+        vscode.window.showInformationMessage(`Exported ${selected.length} skills to zip`);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(e?.message || 'Failed to export skills');
+      }
+    })
+  );
+  
+  // Batch delete presets
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.batchDeletePresets', async () => {
+      const presets = skillManager.getPresets();
+      
+      if (presets.length === 0) {
+        vscode.window.showWarningMessage('No presets to delete');
+        return;
+      }
+      
+      const selected = await vscode.window.showQuickPick(
+        presets.map(p => ({
+          label: p.name,
+          description: `${p.skillIds.length} skills`,
+          picked: false,
+          preset: p
+        })),
+        {
+          canPickMany: true,
+          placeHolder: 'Select presets to delete (use Space to select, Enter to confirm)'
+        }
+      );
+      
+      if (!selected || selected.length === 0) {
+        return;
+      }
+      
+      const res = await vscode.window.showWarningMessage(
+        `Delete ${selected.length} preset(s)?`,
+        { modal: true },
+        'Delete'
+      );
+      
+      if (res === 'Delete') {
+        for (const item of selected) {
+          await skillManager.deletePreset(item.preset.id);
+        }
+        await presetsProvider.loadPresets();
+        vscode.window.showInformationMessage(`Deleted ${selected.length} presets`);
+      }
+    })
+  );
+  
+  // Batch export presets
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.batchExportPresets', async () => {
+      const presets = skillManager.getPresets();
+      
+      if (presets.length === 0) {
+        vscode.window.showWarningMessage('No presets to export');
+        return;
+      }
+      
+      const selected = await vscode.window.showQuickPick(
+        presets.map(p => ({
+          label: p.name,
+          description: `${p.skillIds.length} skills`,
+          picked: false,
+          preset: p
+        })),
+        {
+          canPickMany: true,
+          placeHolder: 'Select presets to export (use Space to select, Enter to confirm)'
+        }
+      );
+      
+      if (!selected || selected.length === 0) {
+        return;
+      }
+      
+      const uri = await vscode.window.showSaveDialog({
+        filters: { 'Zip Files': ['zip'] },
+        saveLabel: 'Export presets zip',
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), `presets-${selected.length}.zip`))
+      });
+      
+      if (!uri) {
+        return;
+      }
+      
+      try {
+        await skillManager.exportPresetsToZip(selected.map(s => s.preset.id), uri.fsPath);
+        vscode.window.showInformationMessage(`Exported ${selected.length} presets to zip`);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(e?.message || 'Failed to export presets');
+      }
+    })
+  );
+  
+  // Search skills
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.searchSkills', async () => {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Search skills by name or description',
+        placeHolder: 'Enter search term...'
+      });
+      
+      if (query !== undefined) {
+        mySkillsProvider.setSearchQuery(query);
+        if (query) {
+          vscode.window.showInformationMessage(`Searching for: "${query}"`);
+        }
+      }
+    })
+  );
+  
+  // Clear skills search
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.clearSkillsSearch', () => {
+      mySkillsProvider.setSearchQuery('');
+      vscode.window.showInformationMessage('Search cleared');
+    })
+  );
+  
+  // Search presets
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.searchPresets', async () => {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Search presets or skills by name or description',
+        placeHolder: 'Enter search term...'
+      });
+      
+      if (query !== undefined) {
+        presetsProvider.setSearchQuery(query);
+        if (query) {
+          vscode.window.showInformationMessage(`Searching for: "${query}"`);
+        }
+      }
+    })
+  );
+  
+  // Clear presets search
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.clearPresetsSearch', () => {
+      presetsProvider.setSearchQuery('');
+      vscode.window.showInformationMessage('Search cleared');
     })
   );
 }

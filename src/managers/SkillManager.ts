@@ -202,4 +202,24 @@ export class SkillManager {
   public calculateMD5FromBuffer(buffer: Buffer): string {
     return this.fileService.calculateMD5FromBuffer(buffer);
   }
+
+  /**
+   * Update skill name in SKILL.md file.
+   */
+  public async updateSkillName(skillId: string, newName: string): Promise<void> {
+    const skillPath = await this.scanService.getSkillFilePath(skillId);
+    if (skillPath) {
+      await this.fileService.updateSkillName(skillPath, newName);
+    }
+  }
+
+  /**
+   * Update skill description in SKILL.md file.
+   */
+  public async updateSkillDescription(skillId: string, newDescription: string): Promise<void> {
+    const skillPath = await this.scanService.getSkillFilePath(skillId);
+    if (skillPath) {
+      await this.fileService.updateSkillDescription(skillPath, newDescription);
+    }
+  }
 }

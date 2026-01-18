@@ -1,50 +1,32 @@
 import * as vscode from 'vscode';
 import { SkillManager } from '../managers/SkillManager';
 import { Skill } from '../models/types';
+import { BaseSkillTreeItem, SkillTreeItemFactory } from './common/SkillTreeItemFactory';
 
-export class MySkillTreeItem extends vscode.TreeItem {
+export class MySkillTreeItem extends BaseSkillTreeItem {
   constructor(
-    public readonly label: string,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly skill?: Skill,
-    public readonly isCategory?: boolean
+    label: string,
+    collapsibleState: vscode.TreeItemCollapsibleState,
+    skill?: Skill,
+    isCategory?: boolean,
+    isDetailItem?: boolean
   ) {
-    super(label, collapsibleState);
+    super(label, collapsibleState, skill, isCategory, isDetailItem);
     
-    if (skill) {
-      this.description = skill.description || '';
-      this.tooltip = new vscode.MarkdownString(
-        `**${skill.name}**\n\n${skill.description || 'No description'}\n\n` +
-        `${skill.tags?.length ? `Tags: ${skill.tags.join(', ')}\n\n` : ''}` +
-        `Path: \`${skill.path}\`\n\nMD5: \`${skill.md5}\``
-      );
-      this.iconPath = new vscode.ThemeIcon('file-code');
-      this.contextValue = 'skill';
-      
-      // Add command to open skill file
-      this.command = {
-        command: 'skillsWizard.openSkill',
-        title: 'Open Skill',
-        arguments: [skill.id]
-      };
-      
-      // Add tags as resource URI for potential decoration
-      if (skill.tags && skill.tags.length > 0) {
-        this.resourceUri = vscode.Uri.parse(`skill://tags/${skill.tags.join(',')}`);
-      }
-    } else if (isCategory) {
+    if (isCategory) {
       this.iconPath = new vscode.ThemeIcon('tag');
       this.contextValue = 'category';
     }
   }
 }
 
-export class MySkillsTreeProvider implements vscode.TreeDataProvider<MySkillTreeItem> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<MySkillTreeItem | undefined | null | void>();
+export class MySkillsTreeProvider implements vscode.TreeDataProvider<MySkillTreeItem | vscode.TreeItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<MySkillTreeItem | vscode.TreeItem | undefined | null | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   
   private importedSkills: Skill[] = [];
   private groupByTags = false;
+  private searchQuery: string = '';
   
   constructor(private readonly skillManager: SkillManager) {}
   
@@ -63,14 +45,31 @@ export class MySkillsTreeProvider implements vscode.TreeDataProvider<MySkillTree
     this.refresh();
   }
   
-  getTreeItem(element: MySkillTreeItem): vscode.TreeItem {
+  setSearchQuery(query: string): void {
+    this.searchQuery = query.toLowerCase();
+    this.refresh();
+  }
+  
+  private filterSkills(skills: Skill[]): Skill[] {
+    if (!this.searchQuery) {
+      return skills;
+    }
+    return skills.filter(skill => 
+      skill.name.toLowerCase().includes(this.searchQuery) ||
+      (skill.description && skill.description.toLowerCase().includes(this.searchQuery))
+    );
+  }
+  
+  getTreeItem(element: MySkillTreeItem | vscode.TreeItem): vscode.TreeItem {
     return element;
   }
   
-  async getChildren(element?: MySkillTreeItem): Promise<MySkillTreeItem[]> {
+  async getChildren(element?: MySkillTreeItem | vscode.TreeItem): Promise<Array<MySkillTreeItem | vscode.TreeItem>> {
     if (!element) {
       // Root level
-      if (this.importedSkills.length === 0) {
+      const filteredSkills = this.filterSkills(this.importedSkills);
+      
+      if (filteredSkills.length === 0) {
         return [];
       }
       
@@ -79,7 +78,7 @@ export class MySkillsTreeProvider implements vscode.TreeDataProvider<MySkillTree
         const tagMap = new Map<string, Skill[]>();
         const untagged: Skill[] = [];
         
-        for (const skill of this.importedSkills) {
+        for (const skill of filteredSkills) {
           if (skill.tags && skill.tags.length > 0) {
             for (const tag of skill.tags) {
               if (!tagMap.has(tag)) {
@@ -116,32 +115,39 @@ export class MySkillsTreeProvider implements vscode.TreeDataProvider<MySkillTree
         
         return items.sort((a, b) => a.label.localeCompare(b.label));
       } else {
-        // Show all skills directly
-        return this.importedSkills.map(skill => new MySkillTreeItem(
-          skill.name,
-          vscode.TreeItemCollapsibleState.None,
-          skill
-        )).sort((a, b) => a.label.localeCompare(b.label));
+        // Show all skills directly using shared factory
+        return filteredSkills.map(skill => {
+          const item = SkillTreeItemFactory.createSkillItem(skill, '');
+          return Object.assign(new MySkillTreeItem(
+            skill.name,
+            vscode.TreeItemCollapsibleState.Collapsed,
+            skill
+          ), item);
+        }).sort((a, b) => a.label!.toString().localeCompare(b.label!.toString()));
       }
-    } else if (element.isCategory) {
+    } else if (element instanceof MySkillTreeItem && element.isCategory) {
       // Show skills in this category
       const categoryName = element.label.replace(/\s*\(\d+\)$/, '');
+      const filteredSkills = this.filterSkills(this.importedSkills);
       
+      let categorySkills: Skill[];
       if (categoryName === 'Untagged') {
-        const untagged = this.importedSkills.filter(s => !s.tags || s.tags.length === 0);
-        return untagged.map(skill => new MySkillTreeItem(
-          skill.name,
-          vscode.TreeItemCollapsibleState.None,
-          skill
-        )).sort((a, b) => a.label.localeCompare(b.label));
+        categorySkills = filteredSkills.filter(s => !s.tags || s.tags.length === 0);
       } else {
-        const tagged = this.importedSkills.filter(s => s.tags?.includes(categoryName));
-        return tagged.map(skill => new MySkillTreeItem(
-          skill.name,
-          vscode.TreeItemCollapsibleState.None,
-          skill
-        )).sort((a, b) => a.label.localeCompare(b.label));
+        categorySkills = filteredSkills.filter(s => s.tags?.includes(categoryName));
       }
+      
+      return categorySkills.map(skill => {
+        const item = SkillTreeItemFactory.createSkillItem(skill, '');
+        return Object.assign(new MySkillTreeItem(
+          skill.name,
+          vscode.TreeItemCollapsibleState.Collapsed,
+          skill
+        ), item);
+      }).sort((a, b) => a.label!.toString().localeCompare(b.label!.toString()));
+    } else if (element instanceof MySkillTreeItem && element.skill && !element.isDetailItem) {
+      // Show skill details using shared factory
+      return SkillTreeItemFactory.createSkillDetailItems(element.skill, '');
     }
     
     return [];

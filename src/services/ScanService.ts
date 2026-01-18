@@ -118,12 +118,17 @@ export class ScanService {
           if (await fs.pathExists(skillMdPath)) {
             const md5 = await this.fileService.calculateMD5(skillMdPath);
             const meta = config.skills[md5] || {};
-            const fileDescription = await this.fileService.readSkillDescriptionFromFile(skillMdPath);
+            
+            // Read from file for latest data
+            const content = await fs.readFile(skillMdPath, 'utf8');
+            const fileDescription = this.fileService.extractDescriptionFromSkillMd(content);
+            const fileName = this.fileService.extractNameFromSkillMd(content);
+            
             imported.push({
               id: md5,
-              name: meta.customName ?? entry.name,
+              name: fileName || meta.customName || entry.name,
               path: skillPath,
-              description: meta.customDescription ?? fileDescription,
+              description: fileDescription || meta.customDescription,
               tags: meta.tags || [],
               md5: md5,
               source: 'extension',

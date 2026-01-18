@@ -3,6 +3,7 @@ import { SkillManager } from './managers/SkillManager';
 import { ImportTreeProvider } from './providers/ImportTreeProvider';
 import { MySkillsTreeProvider } from './providers/MySkillsTreeProvider';
 import { PresetsTreeProvider } from './providers/PresetsTreeProvider';
+import { SettingsTreeProvider } from './providers/SettingsTreeProvider';
 import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -14,6 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const importProvider = new ImportTreeProvider(skillManager);
 	const mySkillsProvider = new MySkillsTreeProvider(skillManager);
 	const presetsProvider = new PresetsTreeProvider(skillManager);
+	const settingsProvider = new SettingsTreeProvider(skillManager);
 	
 	// Register tree views
 	const importView = vscode.window.createTreeView('skillsWizard.importView', {
@@ -31,10 +33,40 @@ export async function activate(context: vscode.ExtensionContext) {
 		showCollapseAll: true
 	});
 	
-	context.subscriptions.push(importView, mySkillsView, presetsView);
+	const settingsView = vscode.window.createTreeView('skillsWizard.settingsView', {
+		treeDataProvider: settingsProvider,
+		showCollapseAll: false
+	});
+	
+	context.subscriptions.push(importView, mySkillsView, presetsView, settingsView);
+	
+	// Setup file watcher for SKILL.md files to auto-update
+	const storagePath = await skillManager.getEffectiveStoragePath();
+	const skillsPattern = new vscode.RelativePattern(storagePath, '**/SKILL.md');
+	const skillFileWatcher = vscode.workspace.createFileSystemWatcher(skillsPattern);
+	
+	// Debounce function to avoid too frequent updates
+	let updateTimeout: NodeJS.Timeout | undefined;
+	const debounceUpdate = () => {
+		if (updateTimeout) {
+			clearTimeout(updateTimeout);
+		}
+		updateTimeout = setTimeout(async () => {
+			await Promise.all([
+				mySkillsProvider.loadSkills(),
+				presetsProvider.loadPresets()
+			]);
+		}, 500);
+	};
+	
+	skillFileWatcher.onDidChange(debounceUpdate);
+	skillFileWatcher.onDidCreate(debounceUpdate);
+	skillFileWatcher.onDidDelete(debounceUpdate);
+	
+	context.subscriptions.push(skillFileWatcher);
 	
 	// Register all commands
-	registerCommands(context, skillManager, importProvider, mySkillsProvider, presetsProvider);
+	registerCommands(context, skillManager, importProvider, mySkillsProvider, presetsProvider, settingsProvider);
 	
 	// Initial load
 	await Promise.all([

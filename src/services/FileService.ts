@@ -118,4 +118,118 @@ export class FileService {
   public normalizeName(value: string): string {
     return value.trim().toLowerCase();
   }
+
+  /**
+   * Update the name in a SKILL.md file (updates YAML frontmatter if exists).
+   */
+  public async updateSkillName(skillMdPath: string, newName: string): Promise<void> {
+    const content = await fs.readFile(skillMdPath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    
+    // Check for YAML frontmatter
+    if (lines[0]?.trim() === '---') {
+      const endIdx = lines.slice(1).findIndex(l => l.trim() === '---');
+      if (endIdx >= 0) {
+        // Has frontmatter, update name field
+        const frontmatterLines = lines.slice(1, endIdx + 1);
+        const nameLineIdx = frontmatterLines.findIndex(l => l.match(/^\s*name:/));
+        
+        if (nameLineIdx >= 0) {
+          // Update existing name
+          frontmatterLines[nameLineIdx] = `name: "${newName}"`;
+        } else {
+          // Add name at the beginning
+          frontmatterLines.unshift(`name: "${newName}"`);
+        }
+        
+        const newLines = [
+          lines[0],
+          ...frontmatterLines.slice(0, -1),
+          lines[endIdx + 1],
+          ...lines.slice(endIdx + 2)
+        ];
+        await fs.writeFile(skillMdPath, newLines.join('\n'), 'utf8');
+        return;
+      }
+    }
+    
+    // No frontmatter, add one
+    const frontmatter = [
+      '---',
+      `name: "${newName}"`,
+      '---',
+      ''
+    ];
+    await fs.writeFile(skillMdPath, frontmatter.join('\n') + content, 'utf8');
+  }
+
+  /**
+   * Update the description in a SKILL.md file (updates YAML frontmatter if exists).
+   */
+  public async updateSkillDescription(skillMdPath: string, newDescription: string): Promise<void> {
+    const content = await fs.readFile(skillMdPath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    
+    // Check for YAML frontmatter
+    if (lines[0]?.trim() === '---') {
+      const endIdx = lines.slice(1).findIndex(l => l.trim() === '---');
+      if (endIdx >= 0) {
+        // Has frontmatter, update description field
+        const frontmatterLines = lines.slice(1, endIdx + 1);
+        const descLineIdx = frontmatterLines.findIndex(l => l.match(/^\s*description:/));
+        
+        if (descLineIdx >= 0) {
+          // Update existing description
+          frontmatterLines[descLineIdx] = `description: "${newDescription}"`;
+        } else {
+          // Add description after name if exists
+          const nameLineIdx = frontmatterLines.findIndex(l => l.match(/^\s*name:/));
+          if (nameLineIdx >= 0) {
+            frontmatterLines.splice(nameLineIdx + 1, 0, `description: "${newDescription}"`);
+          } else {
+            frontmatterLines.unshift(`description: "${newDescription}"`);
+          }
+        }
+        
+        const newLines = [
+          lines[0],
+          ...frontmatterLines.slice(0, -1),
+          lines[endIdx + 1],
+          ...lines.slice(endIdx + 2)
+        ];
+        await fs.writeFile(skillMdPath, newLines.join('\n'), 'utf8');
+        return;
+      }
+    }
+    
+    // No frontmatter, add one
+    const frontmatter = [
+      '---',
+      `description: "${newDescription}"`,
+      '---',
+      ''
+    ];
+    await fs.writeFile(skillMdPath, frontmatter.join('\n') + content, 'utf8');
+  }
+
+  /**
+   * Extract name from SKILL.md content (from YAML frontmatter).
+   */
+  public extractNameFromSkillMd(content: string): string | undefined {
+    const lines = content.split(/\r?\n/);
+    
+    // Check for YAML frontmatter
+    if (lines[0]?.trim() === '---') {
+      const endIdx = lines.slice(1).findIndex(l => l.trim() === '---');
+      if (endIdx >= 0) {
+        const frontmatter = lines.slice(1, endIdx + 1).join('\n');
+        const match = frontmatter.match(/^\s*name:\s*["']?([^"'\n]+)["']?/m);
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+      }
+    }
+    
+    return undefined;
+  }
 }
