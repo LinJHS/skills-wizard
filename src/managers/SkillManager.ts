@@ -25,7 +25,7 @@ export class SkillManager {
     this.ready = this.init(this.legacyStoragePath);
   }
 
-  private getStoragePathFromSettings(): string {
+  protected getStoragePathFromSettings(): string {
     const custom = vscode.workspace.getConfiguration('skillsWizard').get<string>('storagePath')?.trim();
     if (custom) {
       return resolvePath(custom);
