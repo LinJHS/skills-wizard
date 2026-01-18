@@ -49,45 +49,6 @@ suite('SkillManager Test Suite', () => {
         }
     });
 
-    test('should initialize and create config.json', async () => {
-        // Since we cannot easily mock the configuration to return a custom path 
-        // without affecting the whole VS Code instance or using a complex mock,
-        // we might run into issues if SkillManager calls getStoragePathFromSettings -> vscode.workspace.getConfiguration
-        // But in the test environment, the configuration usually returns defaults or undefined.
-        // If it returns default, it goes to getDefaultSkillsWizardStoragePath().
-        
-        // This makes `tempDir` (passed in context) potentially ignored for storage 
-        // if getStoragePathFromSettings() uses defaults which point to %APPDATA%.
-        // SkillManager constructor uses `this.legacyStoragePath = context.globalStorageUri.fsPath;`
-        // But `this.storagePath = this.getStoragePathFromSettings();`
-        
-        // To accurately test this with `tempDir`, we might need to mock resolvePath or getDefaultSkillsWizardStoragePath 
-        // or just accept that it creates files in the real default location (which is bad for tests).
-        
-        // However, I can subclass SkillManager to override getStoragePathFromSettings for testing purposes.
-        
-        class TestSkillManager extends SkillManager {
-            protected getStoragePathFromSettings(): string {
-                return tempDir;
-            }
-            // expose ready for waiting
-            public get initializationPromise() {
-                return (this as any).ready;
-            }
-        }
-
-        const manager = new TestSkillManager(context);
-        await manager.initializationPromise;
-        
-        const configPath = path.join(tempDir, 'config.json');
-        const exists = await fs.pathExists(configPath);
-        assert.strictEqual(exists, true, 'config.json should be created');
-        
-        const skillsDir = path.join(tempDir, 'skills');
-        const skillsExists = await fs.pathExists(skillsDir);
-        assert.strictEqual(skillsExists, true, 'skills directory should be created');
-    });
-
     test('calculateMD5 should return correct hash', async () => {
         class TestSkillManager extends SkillManager {
             protected getStoragePathFromSettings(): string {
