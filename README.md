@@ -65,6 +65,10 @@ The extension scans and manages skills from these common locations:
 - `.agent/skills/`
 - ...and others.
 
+## Progrees
+
+2026-01-18: Implemented the first basic version of the file system using the from-scratch UI toolkit.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
