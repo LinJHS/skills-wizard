@@ -77,8 +77,8 @@ jobs:
           files: extension.vsix
           generate_release_notes: true
 
-      # 发布到 VS Code Marketplace
-      - name: Publish to Marketplace
-        run: npx @vscode/vsce publish --packagePath extension.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      # # 发布到 VS Code Marketplace
+      # - name: Publish to Marketplace
+      #   run: npx @vscode/vsce publish --packagePath extension.vsix
+      #   env:
+      #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
