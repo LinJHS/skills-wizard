@@ -67,7 +67,7 @@ The extension scans and manages skills from these common locations:
 
 ## Progrees
 
-2026-01-18: Implemented the first basic version of the file system using the from-scratch UI toolkit.
+2026-01-18: Implemented the first basic version of the file system.
 
 ## 🤝 Contributing
 

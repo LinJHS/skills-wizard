@@ -1,8 +1,8 @@
 {
   "name": "skills-wizard",
   "displayName": "Skills Wizard",
-  "description": "Import, Export and Manage Skills for Coding Assistants",
-  "version": "0.0.1",
+  "description": "Manipulate your Agent Skills, One-Stop, like Dark Magic.",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.108.1"
   },
