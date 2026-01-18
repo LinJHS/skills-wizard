@@ -81,19 +81,33 @@ export class SkillTreeItemFactory {
     };
     items.push(tagsItem);
     
-    // File item
-    const fileItem = new vscode.TreeItem(
-      'Open Source File',
+    // Open SKILL.md item
+    const skillMdItem = new vscode.TreeItem(
+      'Open SKILL.md',
       vscode.TreeItemCollapsibleState.None
     );
-    fileItem.iconPath = new vscode.ThemeIcon('go-to-file');
-    fileItem.contextValue = contextPrefix ? `${contextPrefix}SkillFile` : 'skillFile';
-    fileItem.command = {
-      command: 'skillsWizard.openSkill',
-      title: 'Open File',
+    skillMdItem.iconPath = new vscode.ThemeIcon('file-code');
+    skillMdItem.contextValue = contextPrefix ? `${contextPrefix}SkillMd` : 'skillMd';
+    skillMdItem.command = {
+      command: 'skillsWizard.openSkillMd',
+      title: 'Open SKILL.md',
       arguments: [skill.id]
     };
-    items.push(fileItem);
+    items.push(skillMdItem);
+
+    // Open Skill Dir item
+    const skillDirItem = new vscode.TreeItem(
+      'Open Skill Dir',
+      vscode.TreeItemCollapsibleState.None
+    );
+    skillDirItem.iconPath = new vscode.ThemeIcon('folder-opened');
+    skillDirItem.contextValue = contextPrefix ? `${contextPrefix}SkillDir` : 'skillDir';
+    skillDirItem.command = {
+      command: 'skillsWizard.openSkillDir',
+      title: 'Open Skill Directory',
+      arguments: [skill.id]
+    };
+    items.push(skillDirItem);
     
     return items;
   }
