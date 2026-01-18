@@ -64,13 +64,9 @@ jobs:
           NEW_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           pnpm pkg set version=$NEW_VERSION
 
-      # 编译 (compile)
-      - name: Build
-        run: |
-          pnpm run compile
-
       # 打包生成 .vsix 文件（供 GitHub Release 使用）
-      # Skipped dependencies check because pnpm structure confuses npm list
+      # vsce package 会自动执行 vscode:prepublish (即 pnpm run package) 进行生产环境打包
+      # 使用 --no-dependencies 是因为 esbuild 已经将依赖打包到了 extension.js 中
       - name: Build VSIX
         run: npx @vscode/vsce package --no-dependencies -o extension.vsix
 
