@@ -36,7 +36,10 @@ export class ImportExportService {
    */
   public async importSkill(skill: DiscoveredSkill): Promise<string> {
     await this.configService.ensureReady();
-    const targetDir = path.join(this.configService.getSkillsPath(), skill.name);
+    
+    // Use MD5 as folder name for consistency and uniqueness
+    // This prevents issues when skill name changes
+    const targetDir = path.join(this.configService.getSkillsPath(), skill.md5);
     const existingSkillMd = path.join(targetDir, 'SKILL.md');
     const existingMd5 = (await fs.pathExists(existingSkillMd))
       ? await this.fileService.calculateMD5(existingSkillMd)
@@ -53,8 +56,20 @@ export class ImportExportService {
     const importedSkillMd = path.join(targetDir, 'SKILL.md');
     const importedMd5 = await this.fileService.calculateMD5(importedSkillMd);
 
-    // If we overwrote a same-name skill with a different ID, migrate metadata + presets
-    if (existingMd5 && existingMd5 !== importedMd5) {
+    // Verify MD5 matches (should be the same if content didn't change)
+    if (importedMd5 !== skill.md5) {
+      // Content changed, need to move to new folder
+      const newTargetDir = path.join(this.configService.getSkillsPath(), importedMd5);
+      if (await fs.pathExists(targetDir)) {
+        await fs.move(targetDir, newTargetDir, { overwrite: true });
+      }
+      
+      // Migrate metadata and presets
+      if (existingMd5 && existingMd5 !== importedMd5) {
+        await this.migrateSkillId(existingMd5, importedMd5);
+      }
+    } else if (existingMd5 && existingMd5 !== importedMd5) {
+      // Different MD5, migrate
       await this.migrateSkillId(existingMd5, importedMd5);
     }
 

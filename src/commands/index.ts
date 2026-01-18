@@ -29,15 +29,21 @@ export function registerCommands(
     })
   );
   
-  // Scan workspace
+  // Scan for skills (both workspace and global paths)
   context.subscriptions.push(
-    vscode.commands.registerCommand('skillsWizard.scanWorkspace', async () => {
+    vscode.commands.registerCommand('skillsWizard.scan', async () => {
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: 'Scanning workspace for skills...',
+        title: 'Scanning workspace and global paths for skills...',
         cancellable: false
       }, async () => {
         await importProvider.loadSkills();
+        const { discovered } = await skillManager.scanForSkills();
+        if (discovered.length === 0) {
+          vscode.window.showWarningMessage('No new skills found. All discovered skills are already imported.');
+        } else {
+          vscode.window.showInformationMessage(`Found ${discovered.length} skill(s) ready to import`);
+        }
       });
     })
   );
@@ -496,7 +502,7 @@ export function registerCommands(
     })
   );
   
-  // Export skills to zip
+  // Export skills to zip (interactive selection)
   context.subscriptions.push(
     vscode.commands.registerCommand('skillsWizard.exportSkillsZip', async () => {
       const { imported } = await skillManager.scanForSkills();
@@ -524,10 +530,15 @@ export function registerCommands(
         return;
       }
       
+      const timestamp = new Date().toISOString().split('T')[0];
+      const defaultName = selected.length === 1
+        ? `skill-${selected[0].skill.name.replace(/[^a-zA-Z0-9-_]/g, '-')}-${timestamp}.zip`
+        : `skills-${selected.length}-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export skills zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), 'skills-wizard-skills.zip'))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {
@@ -656,6 +667,84 @@ export function registerCommands(
       } catch (e: any) {
         vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
       }
+    })
+  );
+  
+  // Add skills to existing preset (from My Skills)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.addToExistingPreset', async (item?: MySkillTreeItem) => {
+      const presets = skillManager.getPresets();
+      
+      if (presets.length === 0) {
+        vscode.window.showWarningMessage('No presets available. Create a preset first.');
+        return;
+      }
+      
+      // Get skills to add
+      let skillsToAdd: string[];
+      if (item?.skill) {
+        // Single skill from context menu
+        skillsToAdd = [item.skill.id];
+      } else {
+        // Multi-select from quick pick
+        const { imported } = await skillManager.scanForSkills();
+        if (imported.length === 0) {
+          vscode.window.showWarningMessage('No skills available');
+          return;
+        }
+        
+        const selected = await vscode.window.showQuickPick(
+          imported.map(s => ({
+            label: s.name,
+            description: s.description || '',
+            picked: false,
+            skill: s
+          })),
+          {
+            canPickMany: true,
+            placeHolder: 'Select skills to add to preset'
+          }
+        );
+        
+        if (!selected || selected.length === 0) {
+          return;
+        }
+        
+        skillsToAdd = selected.map(s => s.skill.id);
+      }
+      
+      // Select preset
+      const selectedPreset = await vscode.window.showQuickPick(
+        presets.map(p => ({
+          label: p.name,
+          description: `${p.skillIds.length} skills`,
+          preset: p
+        })),
+        { placeHolder: 'Select preset to add skills to' }
+      );
+      
+      if (!selectedPreset) {
+        return;
+      }
+      
+      // Filter out skills already in preset
+      const newSkillIds = skillsToAdd.filter(id => !selectedPreset.preset.skillIds.includes(id));
+      
+      if (newSkillIds.length === 0) {
+        vscode.window.showInformationMessage('Selected skills are already in this preset');
+        return;
+      }
+      
+      const updated: Preset = {
+        ...selectedPreset.preset,
+        skillIds: [...selectedPreset.preset.skillIds, ...newSkillIds]
+      };
+      
+      await skillManager.savePreset(updated);
+      await presetsProvider.loadPresets();
+      vscode.window.showInformationMessage(
+        `Added ${newSkillIds.length} skill(s) to preset "${selectedPreset.preset.name}"`
+      );
     })
   );
   
@@ -820,10 +909,14 @@ export function registerCommands(
         return;
       }
       
+      const timestamp = new Date().toISOString().split('T')[0];
+      const safeName = item.preset.name.replace(/[^a-zA-Z0-9-_]/g, '-');
+      const defaultName = `preset-${safeName}-${item.preset.skillIds.length}skills-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export preset zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), `preset-${item.preset.name}.zip`))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {
@@ -846,10 +939,14 @@ export function registerCommands(
         return;
       }
       
+      const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const safeName = item.skill.name.replace(/[^a-zA-Z0-9-_]/g, '-');
+      const defaultName = `skill-${safeName}-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export skill zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), `skill-${item.skill.name}.zip`))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {
@@ -868,10 +965,14 @@ export function registerCommands(
   // Export all presets to zip
   context.subscriptions.push(
     vscode.commands.registerCommand('skillsWizard.exportAllPresetsZip', async () => {
+      const presets = skillManager.getPresets();
+      const timestamp = new Date().toISOString().split('T')[0];
+      const defaultName = `all-presets-${presets.length}-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export all presets zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), 'all-presets.zip'))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {
@@ -1052,10 +1153,13 @@ export function registerCommands(
           vscode.window.showInformationMessage(`Deleted ${imported.length} skills`);
         }
       } else if (action.value === 'export') {
+        const timestamp = new Date().toISOString().split('T')[0];
+        const defaultName = `all-skills-${imported.length}-${timestamp}.zip`;
+        
         const uri = await vscode.window.showSaveDialog({
           filters: { 'Zip Files': ['zip'] },
           saveLabel: 'Export all skills zip',
-          defaultUri: vscode.Uri.file(path.join(os.homedir(), 'all-skills.zip'))
+          defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
         });
         
         if (uri) {
@@ -1150,10 +1254,13 @@ export function registerCommands(
         return;
       }
       
+      const timestamp = new Date().toISOString().split('T')[0];
+      const defaultName = `skills-batch-${selected.length}-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export skills zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), `skills-${selected.length}.zip`))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {
@@ -1239,10 +1346,13 @@ export function registerCommands(
         return;
       }
       
+      const timestamp = new Date().toISOString().split('T')[0];
+      const defaultName = `presets-batch-${selected.length}-${timestamp}.zip`;
+      
       const uri = await vscode.window.showSaveDialog({
         filters: { 'Zip Files': ['zip'] },
         saveLabel: 'Export presets zip',
-        defaultUri: vscode.Uri.file(path.join(os.homedir(), `presets-${selected.length}.zip`))
+        defaultUri: vscode.Uri.file(path.join(os.homedir(), defaultName))
       });
       
       if (!uri) {

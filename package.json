@@ -53,7 +53,7 @@
     "viewsWelcome": [
       {
         "view": "skillsWizard.importView",
-        "contents": "No skills found to import.\n[$(search) Scan Workspace](command:skillsWizard.scanWorkspace)\n[$(folder) Scan Custom Path](command:skillsWizard.scanCustomPath)\n[$(github) Import from GitHub](command:skillsWizard.scanGitHub)\n[$(file-zip) Import Bundle](command:skillsWizard.importBundle)"
+        "contents": "No skills found to import.\n[$(search) Scan for Skills](command:skillsWizard.scan)\n[$(folder) Scan Custom Path](command:skillsWizard.scanCustomPath)\n[$(github) Import from GitHub](command:skillsWizard.scanGitHub)\n[$(file-zip) Import Bundle](command:skillsWizard.importBundle)"
       },
       {
         "view": "skillsWizard.mySkillsView",
@@ -76,8 +76,8 @@
         "category": "Skills Wizard"
       },
       {
-        "command": "skillsWizard.scanWorkspace",
-        "title": "Scan Workspace for Skills",
+        "command": "skillsWizard.scan",
+        "title": "Scan for Skills",
         "icon": "$(search)",
         "category": "Skills Wizard"
       },
@@ -256,6 +256,12 @@
         "category": "Skills Wizard"
       },
       {
+        "command": "skillsWizard.addToExistingPreset",
+        "title": "Add to Existing Preset",
+        "icon": "$(add)",
+        "category": "Skills Wizard"
+      },
+      {
         "command": "skillsWizard.renamePreset",
         "title": "Rename Preset",
         "icon": "$(edit)",
@@ -292,42 +298,7 @@
         "category": "Skills Wizard"
       }
     ],
-    "submenus": [
-      {
-        "id": "skillsWizard.skillActions",
-        "label": "Skill Actions"
-      },
-      {
-        "id": "skillsWizard.presetActions",
-        "label": "Preset Actions"
-      }
-    ],
     "menus": {
-      "skillsWizard.skillActions": [
-        {
-          "command": "skillsWizard.editSkillName"
-        },
-        {
-          "command": "skillsWizard.editSkillDescription"
-        },
-        {
-          "command": "skillsWizard.editTags"
-        },
-        {
-          "command": "skillsWizard.exportSkillZip"
-        }
-      ],
-      "skillsWizard.presetActions": [
-        {
-          "command": "skillsWizard.renamePreset"
-        },
-        {
-          "command": "skillsWizard.addSkillsToPreset"
-        },
-        {
-          "command": "skillsWizard.exportPresetZip"
-        }
-      ],
       "view/title": [
         {
           "command": "skillsWizard.refresh",
@@ -335,7 +306,7 @@
           "group": "navigation"
         },
         {
-          "command": "skillsWizard.scanWorkspace",
+          "command": "skillsWizard.scan",
           "when": "view == skillsWizard.importView",
           "group": "navigation"
         },
@@ -400,14 +371,19 @@
           "group": "2_batch@1"
         },
         {
-          "command": "skillsWizard.batchDeleteSkills",
+          "command": "skillsWizard.addToExistingPreset",
           "when": "view == skillsWizard.mySkillsView",
           "group": "2_batch@2"
         },
         {
-          "command": "skillsWizard.batchExportSkills",
+          "command": "skillsWizard.batchDeleteSkills",
           "when": "view == skillsWizard.mySkillsView",
           "group": "2_batch@3"
+        },
+        {
+          "command": "skillsWizard.batchExportSkills",
+          "when": "view == skillsWizard.mySkillsView",
+          "group": "2_batch@4"
         },
         {
           "command": "skillsWizard.exportSkillsZip",
@@ -452,9 +428,29 @@
           "group": "2_preset@1"
         },
         {
-          "submenu": "skillsWizard.skillActions",
+          "command": "skillsWizard.addToExistingPreset",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "2_preset@2"
+        },
+        {
+          "command": "skillsWizard.editSkillName",
           "when": "view == skillsWizard.mySkillsView && viewItem == skill",
           "group": "3_edit@1"
+        },
+        {
+          "command": "skillsWizard.editSkillDescription",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "3_edit@2"
+        },
+        {
+          "command": "skillsWizard.editTags",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "3_edit@3"
+        },
+        {
+          "command": "skillsWizard.exportSkillZip",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "3_export@1"
         },
         {
           "command": "skillsWizard.deleteSkill",
@@ -472,9 +468,19 @@
           "group": "1_actions@1"
         },
         {
-          "submenu": "skillsWizard.presetActions",
+          "command": "skillsWizard.renamePreset",
           "when": "view == skillsWizard.presetsView && viewItem == preset",
           "group": "2_edit@1"
+        },
+        {
+          "command": "skillsWizard.addSkillsToPreset",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "skillsWizard.exportPresetZip",
+          "when": "view == skillsWizard.presetsView && viewItem == preset",
+          "group": "2_export@1"
         },
         {
           "command": "skillsWizard.deletePreset",
@@ -490,11 +496,6 @@
           "command": "skillsWizard.openSkill",
           "when": "view == skillsWizard.presetsView && viewItem == presetSkill",
           "group": "1_actions@1"
-        },
-        {
-          "command": "skillsWizard.exportSkillZip",
-          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
-          "group": "3_export@1"
         }
       ]
     },

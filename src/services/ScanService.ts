@@ -25,13 +25,29 @@ export class ScanService {
   /**
    * Scan for skills from global and workspace paths, and return both discovered and imported skills.
    */
-  public async scanForSkills(): Promise<{ discovered: DiscoveredSkill[], imported: Skill[] }> {
+  public async scanForSkills(): Promise<{ 
+    discovered: DiscoveredSkill[], 
+    imported: Skill[],
+    allDiscovered: DiscoveredSkill[] // All discovered including already imported
+  }> {
     await this.configService.ensureReady();
     const discovered: DiscoveredSkill[] = [...this.tempDiscovered];
     
-    // 1. Scan Global Paths
+    // Get storage path to exclude it from scanning
+    const storagePath = this.configService.getSkillsPath();
+    const normalizedStoragePath = path.normalize(storagePath);
+    
+    // 1. Scan Global Paths (excluding our own storage directory)
     for (const pattern of GLOBAL_SKILL_PATHS) {
       const resolvedBase = resolvePath(pattern);
+      const normalizedBase = path.normalize(resolvedBase);
+      
+      // Skip if this is our storage directory
+      if (normalizedBase === normalizedStoragePath || 
+          normalizedStoragePath.startsWith(normalizedBase + path.sep)) {
+        continue;
+      }
+      
       if (await fs.pathExists(resolvedBase)) {
         try {
           const entries = await fs.readdir(resolvedBase, { withFileTypes: true });
@@ -58,11 +74,19 @@ export class ScanService {
       }
     }
 
-    // 2. Scan Workspace Paths
+    // 2. Scan Workspace Paths (excluding our own storage directory)
     if (vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
         for (const relativePath of WORKSPACE_SKILL_PATHS) {
           const workspaceBase = path.join(folder.uri.fsPath, relativePath);
+          const normalizedWorkspaceBase = path.normalize(workspaceBase);
+          
+          // Skip if this is our storage directory
+          if (normalizedWorkspaceBase === normalizedStoragePath || 
+              normalizedStoragePath.startsWith(normalizedWorkspaceBase + path.sep)) {
+            continue;
+          }
+          
           if (await fs.pathExists(workspaceBase)) {
             try {
               const entries = await fs.readdir(workspaceBase, { withFileTypes: true });
@@ -96,18 +120,30 @@ export class ScanService {
     
     // Deduplicate discovered: if same MD5 exists in discovered, keep one
     const uniqueDiscovered = Array.from(new Map(discovered.map(item => [item.md5, item])).values());
+    
+    // Filter out skills that are already imported (same MD5)
+    const importedMd5s = new Set(imported.map(s => s.md5));
+    const notImported = uniqueDiscovered.filter(s => !importedMd5s.has(s.md5));
 
-    return { discovered: uniqueDiscovered, imported };
+    return { 
+      discovered: notImported, 
+      imported,
+      allDiscovered: uniqueDiscovered // Return all discovered for UI display
+    };
   }
 
   /**
    * Get all imported skills from storage.
+   * Uses file system as source of truth and cleans up orphaned config entries.
    */
   public async getImportedSkills(): Promise<Skill[]> {
     await this.configService.ensureReady();
     const imported: Skill[] = [];
     const config = this.configService.getConfig();
     const internalSkillsDir = this.configService.getSkillsPath();
+    
+    const validSkillIds = new Set<string>();
+    let configChanged = false;
     
     if (await fs.pathExists(internalSkillsDir)) {
       const entries = await fs.readdir(internalSkillsDir, { withFileTypes: true });
@@ -116,27 +152,66 @@ export class ScanService {
           const skillPath = path.join(internalSkillsDir, entry.name);
           const skillMdPath = path.join(skillPath, 'SKILL.md');
           if (await fs.pathExists(skillMdPath)) {
-            const md5 = await this.fileService.calculateMD5(skillMdPath);
-            const meta = config.skills[md5] || {};
-            
-            // Read from file for latest data
-            const content = await fs.readFile(skillMdPath, 'utf8');
-            const fileDescription = this.fileService.extractDescriptionFromSkillMd(content);
-            const fileName = this.fileService.extractNameFromSkillMd(content);
-            
-            imported.push({
-              id: md5,
-              name: fileName || meta.customName || entry.name,
-              path: skillPath,
-              description: fileDescription || meta.customDescription,
-              tags: meta.tags || [],
-              md5: md5,
-              source: 'extension',
-              isImported: true
-            });
+            try {
+              const md5 = await this.fileService.calculateMD5(skillMdPath);
+              validSkillIds.add(md5);
+              
+              // Ensure metadata exists in config
+              if (!config.skills[md5]) {
+                config.skills[md5] = { tags: [] };
+                configChanged = true;
+              }
+              
+              const meta = config.skills[md5];
+              
+              // Read from file for latest data
+              const content = await fs.readFile(skillMdPath, 'utf8');
+              const fileDescription = this.fileService.extractDescriptionFromSkillMd(content);
+              const fileName = this.fileService.extractNameFromSkillMd(content);
+              
+              // Folder name should be MD5, but fall back to entry.name for backward compatibility
+              const displayName = fileName || meta.customName || entry.name;
+              
+              imported.push({
+                id: md5,
+                name: displayName,
+                path: skillPath,
+                description: fileDescription || meta.customDescription,
+                tags: meta.tags || [],
+                md5: md5,
+                source: 'extension',
+                isImported: true
+              });
+            } catch (err) {
+              // Skip invalid skills
+              console.error(`Failed to load skill from ${skillPath}:`, err);
+            }
           }
         }
       }
+    }
+    
+    // Clean up orphaned config entries (skills in config but not in file system)
+    for (const skillId of Object.keys(config.skills)) {
+      if (!validSkillIds.has(skillId)) {
+        console.warn(`Cleaning up orphaned skill metadata: ${skillId}`);
+        delete config.skills[skillId];
+        configChanged = true;
+      }
+    }
+    
+    // Remove orphaned skill IDs from presets
+    const originalPresets = JSON.stringify(config.presets);
+    config.presets = (config.presets || []).map(p => ({
+      ...p,
+      skillIds: (p.skillIds || []).filter(id => validSkillIds.has(id))
+    }));
+    if (JSON.stringify(config.presets) !== originalPresets) {
+      configChanged = true;
+    }
+    
+    if (configChanged) {
+      await this.configService.saveConfig();
     }
     
     return imported;
@@ -147,6 +222,18 @@ export class ScanService {
    */
   public async scanCustomPath(targetPath: string): Promise<{ added: number; total: number }> {
     await this.configService.ensureReady();
+    
+    // Prevent scanning our own storage directory
+    const storagePath = this.configService.getSkillsPath();
+    const normalizedStoragePath = path.normalize(storagePath);
+    const normalizedTargetPath = path.normalize(targetPath);
+    
+    if (normalizedTargetPath === normalizedStoragePath || 
+        normalizedTargetPath.startsWith(normalizedStoragePath + path.sep) ||
+        normalizedStoragePath.startsWith(normalizedTargetPath + path.sep)) {
+      throw new Error('Cannot scan the Skills Wizard storage directory itself. Please scan workspace or other external paths.');
+    }
+    
     const skillPaths = await this.fileService.scanRecursively(targetPath);
     const found: DiscoveredSkill[] = [];
     

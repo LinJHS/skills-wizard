@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 import { Skill, Preset, DiscoveredSkill, SkillMetadata } from '../models/types';
 import { ConfigService } from '../services/ConfigService';
 import { FileService } from '../services/FileService';
@@ -41,7 +43,11 @@ export class SkillManager {
   /**
    * Scan for skills from global and workspace paths.
    */
-  public async scanForSkills(): Promise<{ discovered: DiscoveredSkill[], imported: Skill[] }> {
+  public async scanForSkills(): Promise<{ 
+    discovered: DiscoveredSkill[], 
+    imported: Skill[],
+    allDiscovered?: DiscoveredSkill[] 
+  }> {
     return this.scanService.scanForSkills();
   }
 
@@ -205,21 +211,85 @@ export class SkillManager {
 
   /**
    * Update skill name in SKILL.md file.
+   * Handles MD5 changes and updates all references (config, presets).
    */
   public async updateSkillName(skillId: string, newName: string): Promise<void> {
     const skillPath = await this.scanService.getSkillFilePath(skillId);
-    if (skillPath) {
-      await this.fileService.updateSkillName(skillPath, newName);
+    if (!skillPath) {
+      return;
+    }
+
+    // Calculate MD5 before update
+    const oldMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // Update the file
+    await this.fileService.updateSkillName(skillPath, newName);
+
+    // Calculate MD5 after update
+    const newMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // If MD5 changed, we need to migrate the skill
+    if (oldMd5 !== newMd5) {
+      await this.migrateSkillId(oldMd5, newMd5);
     }
   }
 
   /**
    * Update skill description in SKILL.md file.
+   * Handles MD5 changes and updates all references (config, presets).
    */
   public async updateSkillDescription(skillId: string, newDescription: string): Promise<void> {
     const skillPath = await this.scanService.getSkillFilePath(skillId);
-    if (skillPath) {
-      await this.fileService.updateSkillDescription(skillPath, newDescription);
+    if (!skillPath) {
+      return;
     }
+
+    // Calculate MD5 before update
+    const oldMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // Update the file
+    await this.fileService.updateSkillDescription(skillPath, newDescription);
+
+    // Calculate MD5 after update
+    const newMd5 = await this.fileService.calculateMD5(skillPath);
+
+    // If MD5 changed, we need to migrate the skill
+    if (oldMd5 !== newMd5) {
+      await this.migrateSkillId(oldMd5, newMd5);
+    }
+  }
+
+  /**
+   * Migrate skill from old ID to new ID (when MD5 changes).
+   * Updates folder name, config, and preset references.
+   */
+  private async migrateSkillId(oldId: string, newId: string): Promise<void> {
+    await this.configService.ensureReady();
+    const skillsPath = this.configService.getSkillsPath();
+    
+    const oldPath = path.join(skillsPath, oldId);
+    const newPath = path.join(skillsPath, newId);
+    
+    // Rename folder
+    if (await fs.pathExists(oldPath)) {
+      await fs.move(oldPath, newPath, { overwrite: true });
+    }
+    
+    // Update config and preset references
+    const config = this.configService.getConfig();
+    
+    // Migrate skill metadata
+    if (config.skills[oldId]) {
+      config.skills[newId] = config.skills[oldId];
+      delete config.skills[oldId];
+    }
+    
+    // Update all preset references
+    config.presets = (config.presets || []).map(p => ({
+      ...p,
+      skillIds: (p.skillIds || []).map(id => (id === oldId ? newId : id))
+    }));
+    
+    await this.configService.saveConfig();
   }
 }

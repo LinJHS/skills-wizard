@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs-extra';
 import { DiscoveredSkill } from '../models/types';
 import { WORKSPACE_SKILL_PATHS, GITHUB_EXTRA_SKILL_PATHS } from '../utils/paths';
 import { FileService } from './FileService';
@@ -296,9 +297,6 @@ export class GitHubService {
    * Download a GitHub directory (recursively) to a local directory.
    */
   public async downloadGitHubDirectory(apiUrl: string, localDir: string): Promise<void> {
-    const fs = await import('fs-extra');
-    const path = await import('path');
-    
     const res = await fetch(apiUrl, { headers: this.getGitHubHeaders() });
     if (!res.ok) {
       throw new Error(`Failed to fetch ${apiUrl}`);
