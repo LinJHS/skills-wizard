@@ -19,16 +19,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
-          cache: 'npm'
-      - run: npm install
+          cache: 'pnpm'
+      - run: pnpm install
       - name: Run Tests (Linux)
-        run: xvfb-run -a npm test
+        run: xvfb-run -a pnpm test
         if: runner.os == 'Linux'
       - name: Run Tests (Non-Linux)
-        run: npm test
+        run: pnpm test
         if: runner.os != 'Linux'
 
   # 2. 发布任务：仅在推送 Tag 时运行，且依赖于测试通过
@@ -40,15 +43,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
       
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18.x
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: npm install
+        run: pnpm install
 
       # 根据 Tag 自动更新 package.json 的版本号
       # github.ref_name 会拿到 "v1.0.2"，通过 sed 去掉前面的 'v' 得到 "1.0.2"
