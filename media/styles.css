@@ -226,13 +226,18 @@ button:disabled {
 }
 
 input[type="text"],
+input[type="search"],
+input[type="checkbox"] {
+  font-family: var(--vscode-font-family);
+}
+
+input[type="text"],
 input[type="search"] {
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border);
   padding: 6px 10px;
   font-size: 13px;
-  font-family: var(--vscode-font-family);
   border-radius: 2px;
 }
 
