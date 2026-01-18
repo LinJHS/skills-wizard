@@ -40,6 +40,10 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
     this.refresh();
   }
   
+  getSkill(id: string): DiscoveredSkill | undefined {
+    return this.scannedSkills.find(s => s.md5 === id);
+  }
+  
   getTreeItem(element: ImportTreeItem | vscode.TreeItem): vscode.TreeItem {
     return element;
   }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs-extra';
 import { SkillManager } from '../managers/SkillManager';
 import { ImportTreeProvider, ImportTreeItem } from '../providers/ImportTreeProvider';
 import { MySkillsTreeProvider, MySkillTreeItem } from '../providers/MySkillsTreeProvider';
@@ -299,34 +300,200 @@ export function registerCommands(
   
   // Open skill file
   context.subscriptions.push(
-    vscode.commands.registerCommand('skillsWizard.openSkill', async (skillIdOrItem: string | MySkillTreeItem | PresetTreeItem) => {
-      let skillId: string | undefined;
-      
-      if (typeof skillIdOrItem === 'string') {
-        skillId = skillIdOrItem;
-      } else if (skillIdOrItem instanceof MySkillTreeItem && skillIdOrItem.skill) {
-        skillId = skillIdOrItem.skill.id;
-      } else if (skillIdOrItem instanceof PresetTreeItem && skillIdOrItem.skill) {
-        skillId = skillIdOrItem.skill.id;
-      }
-      
+    vscode.commands.registerCommand('skillsWizard.openSkill', async (arg: any) => {
+      const skillId = extractSkillId(arg);
       if (!skillId) {
         return;
       }
       
       try {
-        const filePath = await skillManager.getSkillFilePath(skillId);
-        if (!filePath) {
-          vscode.window.showErrorMessage('SKILL.md not found for this skill');
+        // 1. Try to get local path (imported)
+        const localPath = await skillManager.getSkillFilePath(skillId);
+        if (localPath) {
+          await vscode.window.showTextDocument(vscode.Uri.file(localPath), { preview: false });
           return;
         }
-        await vscode.window.showTextDocument(vscode.Uri.file(filePath), { preview: false });
+
+        // 2. Try to get discovered skill (for GitHub links)
+        const discovered = importProvider.getSkill(skillId);
+        if (discovered && discovered.isRemote && discovered.path) {
+           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path, true, 'SKILL.md');
+           await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
+           return;
+        } else if (discovered && !discovered.isRemote) {
+            // Local discovered (custom path)
+            const p = path.join(discovered.path, 'SKILL.md');
+            if (await fs.pathExists(p)) {
+                await vscode.window.showTextDocument(vscode.Uri.file(p));
+                return;
+            }
+        }
+
+        vscode.window.showErrorMessage('SKILL.md not found for this skill');
       } catch (e: any) {
         vscode.window.showErrorMessage(e?.message || 'Failed to open skill file');
       }
     })
   );
+
+  // Open SKILL.md (Explicit)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.openSkillMd', async (arg: any) => {
+      const skillId = extractSkillId(arg);
+      if (!skillId) {
+        return;
+      }
+
+      try {
+        // Priority: Use provided skill object in CLI args if available (Fixes opening duplicate imported skills locally)
+        // If the tree item passed the original discovered path, we should use it.
+        if (arg?.path && arg?.name) {
+           // If it's a remote skill or specifically marked regular path
+           if (arg.isRemote) {
+             const skillMdUrl = convertGitHubApiUrlToHtml(arg.path, true, 'SKILL.md');
+             await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
+             return;
+           } else {
+             // It's a local path from the argument
+             const p = path.join(arg.path, 'SKILL.md');
+             if (await fs.pathExists(p)) {
+               await vscode.window.showTextDocument(vscode.Uri.file(p));
+               return;
+             }
+           }
+        }
+
+        // Fallback: Lookup by ID
+        // 1. Local (Imported)
+        const localPath = await skillManager.getSkillFilePath(skillId);
+        if (localPath) {
+          await vscode.window.showTextDocument(vscode.Uri.file(localPath));
+          return;
+        }
+        
+        // 2. Remote (Discovered via Import Provider)
+        const discovered = importProvider.getSkill(skillId);
+        if (discovered && discovered.isRemote && discovered.path) {
+           const skillMdUrl = convertGitHubApiUrlToHtml(discovered.path, true, 'SKILL.md');
+           await vscode.env.openExternal(vscode.Uri.parse(skillMdUrl));
+           return;
+        } else if (discovered && !discovered.isRemote) {
+            const p = path.join(discovered.path, 'SKILL.md');
+            if (await fs.pathExists(p)) {
+                await vscode.window.showTextDocument(vscode.Uri.file(p));
+                return;
+            }
+        }
+        vscode.window.showErrorMessage('SKILL.md not found');
+      } catch (e: any) {
+         vscode.window.showErrorMessage('Failed to open SKILL.md: ' + e.message);
+      }
+    })
+  );
+
+  // Open Skill Directory
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.openSkillDir', async (arg: any) => {
+      const skillId = extractSkillId(arg);
+      if (!skillId) {
+        return;
+      }
+
+      try {
+        // Priority: Use provided skill object in CLI args
+        if (arg?.path) {
+           if (arg.isRemote) {
+             const webUrl = convertGitHubApiUrlToHtml(arg.path, false);
+             await vscode.env.openExternal(vscode.Uri.parse(webUrl));
+             return;
+           } else {
+              if (await fs.pathExists(arg.path)) {
+                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(arg.path));
+                return;
+              }
+           }
+        }
+
+        // Fallback: Lookup by ID
+        // 1. Local
+        const localPath = await skillManager.getSkillFilePath(skillId);
+        if (localPath) {
+          const dir = path.dirname(localPath);
+          await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(dir));
+          return;
+        }
+        
+        // 2. Remote
+        const discovered = importProvider.getSkill(skillId);
+        if (discovered && discovered.isRemote && discovered.path) {
+           const webUrl = convertGitHubApiUrlToHtml(discovered.path, false);
+           await vscode.env.openExternal(vscode.Uri.parse(webUrl));
+           return;
+        } else if (discovered && !discovered.isRemote) {
+            await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(discovered.path));
+            return;
+        }
+         vscode.window.showErrorMessage('Directory not found');
+      } catch (e: any) {
+         vscode.window.showErrorMessage('Failed to open directory: ' + e.message);
+      }
+    })
+  );
   
+  // Helper to extract ID
+  const extractSkillId = (arg: any): string | undefined => {
+      if (typeof arg === 'string') {
+        return arg;
+      }
+      if (arg?.skill?.id) {
+        return arg.skill.id;
+      }
+      if (arg?.skill?.md5) {
+        return arg.skill.md5;
+      }
+      if (arg?.id) {
+        return arg.id; // Fallback
+      }
+      return undefined;
+  };
+  
+  // Helper to convert GitHub API URL to HTML URL
+  const convertGitHubApiUrlToHtml = (apiUrl: string, isFile: boolean, appendFile?: string): string => {
+      // API: https://api.github.com/repos/:owner/:repo/contents/:path?ref=:branch
+      // HTML: https://github.com/:owner/:repo/tree/:branch/:path (dir)
+      // HTML: https://github.com/:owner/:repo/blob/:branch/:path (file)
+      
+      try {
+        const u = new URL(apiUrl);
+        if (u.hostname !== 'api.github.com') {
+          return apiUrl;
+        }
+        
+        const pathParts = u.pathname.split('/').filter(p => p);
+        // pathParts: ['repos', owner, repo, 'contents', ...path]
+        if (pathParts.length < 5) {
+          return apiUrl;
+        }
+        
+        const owner = pathParts[1];
+        const repo = pathParts[2];
+        const initialContentPath = pathParts.slice(4).join('/');
+        let contentPath = initialContentPath;
+        
+        if (appendFile) {
+            // appendFile (SKILL.md) should be appended to the contentPath
+            contentPath = contentPath ? `${contentPath}/${appendFile}` : appendFile;
+        }
+
+        const ref = u.searchParams.get('ref') || 'main'; // default to main if no ref
+        
+        const typeSegment = isFile ? 'blob' : 'tree';
+        return `https://github.com/${owner}/${repo}/${typeSegment}/${ref}/${contentPath}`;
+      } catch {
+          return apiUrl;
+      }
+  };
+
   // Add to workspace
   context.subscriptions.push(
     vscode.commands.registerCommand('skillsWizard.addToWorkspace', async (item?: MySkillTreeItem) => {

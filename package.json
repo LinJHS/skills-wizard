@@ -149,6 +149,18 @@
         "category": "Skills Wizard"
       },
       {
+        "command": "skillsWizard.openSkillMd",
+        "title": "Open SKILL.md",
+        "icon": "$(file-code)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.openSkillDir",
+        "title": "Open Skill Directory",
+        "icon": "$(folder-opened)",
+        "category": "Skills Wizard"
+      },
+      {
         "command": "skillsWizard.addToWorkspace",
         "title": "Add to Workspace",
         "icon": "$(export)",
@@ -440,13 +452,33 @@
       "view/item/context": [
         {
           "command": "skillsWizard.importSkill",
-          "when": "view == skillsWizard.importView && viewItem == skill",
+          "when": "view == skillsWizard.importView && viewItem == importSkill",
           "group": "inline"
+        },
+        {
+          "command": "skillsWizard.importSkill",
+          "when": "view == skillsWizard.importView && viewItem == importSkill",
+          "group": "1_actions@1"
         },
         {
           "command": "skillsWizard.importSkill",
           "when": "view == skillsWizard.importView && viewItem == skill",
           "group": "1_actions@1"
+        },
+        {
+          "command": "skillsWizard.openSkillMd",
+          "when": "(view == skillsWizard.importView && (viewItem == importSkill || viewItem == importedSkill)) || (view == skillsWizard.mySkillsView && viewItem == skill)",
+          "group": "1_open@1"
+        },
+        {
+          "command": "skillsWizard.openSkillDir",
+          "when": "(view == skillsWizard.importView && (viewItem == importSkill || viewItem == importedSkill)) || (view == skillsWizard.mySkillsView && viewItem == skill)",
+          "group": "1_open@2"
+        },
+        {
+          "command": "skillsWizard.addToWorkspace",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "inline"
         },
         {
           "command": "skillsWizard.addToWorkspace",
