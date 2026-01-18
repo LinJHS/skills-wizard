@@ -62,18 +62,17 @@ jobs:
       - name: Update version in package.json
         run: |
           NEW_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          npm pkg set version=$NEW_VERSION
+          pnpm pkg set version=$NEW_VERSION
 
-      # 编译并清理开发依赖 (compile then prune dev dependencies)
-      - name: Build and Prune
+      # 编译 (compile)
+      - name: Build
         run: |
           pnpm run compile
-          pnpm prune --prod
 
       # 打包生成 .vsix 文件（供 GitHub Release 使用）
       # Skipped dependencies check because pnpm structure confuses npm list
       - name: Build VSIX
-        run: npx @vscode/vsce package --no-dependencies --no-prepublish -o extension.vsix
+        run: npx @vscode/vsce package --no-dependencies -o extension.vsix
 
       # 创建 GitHub Release 并上传 .vsix
       - name: Create GitHub Release
