@@ -2,7 +2,7 @@
   "name": "skills-wizard",
   "displayName": "Skills Wizard",
   "description": "Manipulate your Agent Skills, One-Stop, like Dark Magic.",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.108.1"
   },
@@ -10,6 +10,10 @@
     "AI",
     "Chat"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LinJHS/skills-wizard.git"
+  },
   "activationEvents": [
     "onView:skillsWizard.importView",
     "onView:skillsWizard.mySkillsView",
