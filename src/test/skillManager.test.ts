@@ -67,4 +67,53 @@ suite('SkillManager Test Suite', () => {
         const hash = await manager.calculateMD5(testFile);
         assert.strictEqual(hash, '5eb63bbbe01eeed093cb22bb8f5acdc3');
     });
+
+    test('should import skill correctly', async () => {
+        // 1. Create a dummy skill in a temp location
+        const externalSkillDir = path.join(os.tmpdir(), 'external-skill-test-' + Date.now());
+        await fs.ensureDir(externalSkillDir);
+        await fs.writeFile(path.join(externalSkillDir, 'SKILL.md'), '--- \ndescription: A test skill\n--- \n# Test Skill Content');
+        await fs.writeFile(path.join(externalSkillDir, 'helper.js'), 'console.log("helper")');
+
+        try {
+            // 2. Setup manager
+            class TestSkillManager extends SkillManager {
+                protected getStoragePathFromSettings(): string {
+                    return tempDir;
+                }
+                public get initializationPromise() { return (this as any).ready; }
+            }
+            const manager = new TestSkillManager(context);
+            await manager.initializationPromise;
+
+            // 3. Prepare discovery object
+            const md5 = await manager.calculateMD5(path.join(externalSkillDir, 'SKILL.md'));
+            const discovered = {
+                name: 'test-skill',
+                path: externalSkillDir,
+                md5: md5,
+                description: 'A test skill',
+                sourceLocation: externalSkillDir,
+                isRemote: false
+            };
+
+            // 4. Import
+            const importedId = await manager.importSkill(discovered);
+            
+            // 5. Verify
+            assert.strictEqual(importedId, md5);
+            
+            const importedSkillPath = path.join(tempDir, 'skills', 'test-skill');
+            assert.ok(await fs.pathExists(path.join(importedSkillPath, 'SKILL.md')), 'SKILL.md should exist in storage');
+            assert.ok(await fs.pathExists(path.join(importedSkillPath, 'helper.js')), 'helper.js should exist in storage');
+            
+            // Verify config
+            const configPath = path.join(tempDir, 'config.json');
+            const config = await fs.readJSON(configPath);
+            assert.ok(config.skills[importedId], 'Skill metadata should be present in config');
+
+        } finally {
+            await fs.remove(externalSkillDir);
+        }
+    });
 });
