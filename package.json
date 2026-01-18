@@ -29,34 +29,181 @@
     "views": {
       "skills-wizard-view-container": [
         {
-          "type": "webview",
           "id": "skillsWizard.importView",
           "name": "Import Skills"
         },
         {
-          "type": "webview",
           "id": "skillsWizard.mySkillsView",
           "name": "My Skills"
         },
         {
-          "type": "webview",
           "id": "skillsWizard.presetsView",
           "name": "Presets"
-        },
-        {
-          "type": "webview",
-          "id": "skillsWizard.settingsView",
-          "name": "Settings"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "skillsWizard.importView",
+        "contents": "No skills discovered yet.\n[Scan Workspace](command:skills-wizard.scanWorkspace)\n[Import from Folder](command:skills-wizard.importSkill)\n[Import from GitHub](command:skills-wizard.scanGitHub)"
+      },
+      {
+        "view": "skillsWizard.mySkillsView",
+        "contents": "No skills imported yet.\nGo to Import Skills view to import skills."
+      },
+      {
+        "view": "skillsWizard.presetsView",
+        "contents": "No presets created yet.\n[Create Preset](command:skills-wizard.createPreset)"
+      }
+    ],
     "commands": [
       {
         "command": "skills-wizard.refresh",
         "title": "Refresh Skills",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "skills-wizard.importSkill",
+        "title": "Skills Wizard: Import Skill",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "skills-wizard.exportSkill",
+        "title": "Skills Wizard: Export Skill to Workspace",
+        "icon": "$(export)"
+      },
+      {
+        "command": "skills-wizard.scanWorkspace",
+        "title": "Skills Wizard: Scan Workspace for Skills",
+        "icon": "$(search)"
+      },
+      {
+        "command": "skills-wizard.scanGitHub",
+        "title": "Skills Wizard: Import from GitHub",
+        "icon": "$(github)"
+      },
+      {
+        "command": "skills-wizard.createPreset",
+        "title": "Skills Wizard: Create Preset",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "skills-wizard.openSettings",
+        "title": "Skills Wizard: Open Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "skills-wizard.skill.export",
+        "title": "Export to Workspace",
+        "icon": "$(export)"
+      },
+      {
+        "command": "skills-wizard.skill.open",
+        "title": "View Files",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "skills-wizard.skill.edit",
+        "title": "Edit Tags",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "skills-wizard.skill.delete",
+        "title": "Delete Skill",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "skills-wizard.importSkillFromTree",
+        "title": "Import Skill"
+      },
+      {
+        "command": "skills-wizard.preset.apply-merge",
+        "title": "Apply (Merge)"
+      },
+      {
+        "command": "skills-wizard.preset.apply-replace",
+        "title": "Apply (Replace)"
+      },
+      {
+        "command": "skills-wizard.preset.export",
+        "title": "Export Preset"
+      },
+      {
+        "command": "skills-wizard.preset.delete",
+        "title": "Delete Preset"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "skills-wizard.importSkill"
+        },
+        {
+          "command": "skills-wizard.exportSkill"
+        },
+        {
+          "command": "skills-wizard.scanWorkspace"
+        },
+        {
+          "command": "skills-wizard.scanGitHub"
+        },
+        {
+          "command": "skills-wizard.createPreset"
+        },
+        {
+          "command": "skills-wizard.openSettings"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "skills-wizard.refresh",
+          "when": "view == skillsWizard.importView || view == skillsWizard.mySkillsView || view == skillsWizard.presetsView",
+          "group": "navigation"
+        },
+        {
+          "command": "skills-wizard.scanWorkspace",
+          "when": "view == skillsWizard.importView",
+          "group": "navigation"
+        },
+        {
+          "command": "skills-wizard.importSkill",
+          "when": "view == skillsWizard.importView",
+          "group": "1_import"
+        },
+        {
+          "command": "skills-wizard.scanGitHub",
+          "when": "view == skillsWizard.importView",
+          "group": "1_import"
+        },
+        {
+          "command": "skills-wizard.createPreset",
+          "when": "view == skillsWizard.presetsView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "skills-wizard.skill.export",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "1_actions"
+        },
+        {
+          "command": "skills-wizard.skill.open",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "1_actions"
+        },
+        {
+          "command": "skills-wizard.skill.edit",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "2_edit"
+        },
+        {
+          "command": "skills-wizard.skill.delete",
+          "when": "view == skillsWizard.mySkillsView && viewItem == skill",
+          "group": "3_delete"
+        }
+      ]
+    },
     "configuration": {
       "title": "Skills Wizard",
       "properties": {
@@ -75,13 +222,14 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
     "pretest": "pnpm run compile && pnpm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.44",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "adm-zip": "^0.5.16",
     "fs-extra": "^11.3.3"
@@ -96,7 +244,10 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
     "eslint": "^9.39.2",
+    "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.52.0"
+    "typescript-eslint": "^8.52.0",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1"
   }
 }

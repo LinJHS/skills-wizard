@@ -1,22 +1,37 @@
+/* Codicons are loaded via HTML link tag */
+
 body {
-  padding: 16px;
+  padding: 20px;
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
   font-size: 13px;
+  line-height: 1.6;
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .row {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
+}
+
+/* Codicons */
+.codicon {
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+.codicon-large {
+  font-size: 48px;
+  opacity: 0.4;
+  margin-bottom: 12px;
 }
 
 .bulk-actions {
@@ -34,12 +49,18 @@ body {
 .skill-item {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 6px;
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.skill-item:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .skill-item.selected,
@@ -74,8 +95,12 @@ body {
 }
 
 .empty {
-  padding: 20px 0;
+  padding: 40px 20px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
 .hint {
@@ -97,23 +122,34 @@ body {
 .preset-item {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 6px;
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.preset-item:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .skill-card-mini {
   border: 1px solid var(--vscode-input-border);
   border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
   background: var(--vscode-input-background);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.skill-card-mini:hover {
+  border-color: var(--vscode-focusBorder);
 }
 
 .tags-area,
@@ -202,12 +238,20 @@ button {
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   border: none;
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 2px;
   cursor: pointer;
   font-size: 13px;
   font-family: var(--vscode-font-family);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.1s ease;
+}
+
+button .codicon {
+  font-size: 14px;
 }
 
 button:hover {

@@ -1,12 +1,9 @@
 export interface Skill {
   id: string; // Unique identifier (usually md5 of SKILL.md)
   name: string;
-  path: string; // Absolute path where the skill is currently stored (in extension storage or external)
   description?: string;
-  tags: string[];
+  tags?: string[];
   md5: string;
-  source: 'workspace' | 'global' | 'extension'; // Where this skill was found/stored
-  isImported: boolean; // If it's saved in the extension's storage
 }
 
 export interface Preset {
@@ -23,17 +20,19 @@ export interface UserConfig {
 }
 
 export interface SkillMetadata {
-  tags: string[];
+  tags?: string[];
   customName?: string;
   customDescription?: string;
+  source?: string;
+  importedAt?: string;
 }
 
 export interface DiscoveredSkill {
+  id?: string;
   name: string;
   path: string;
   md5: string;
   description?: string;
-  sourceLocation: string; // e.g. "~/.claude/skills/"
   isRemote?: boolean; // true if from GitHub
-  remoteUrl?: string; // GitHub API URL for the directory
+  remoteContent?: string; // For GitHub skills
 }

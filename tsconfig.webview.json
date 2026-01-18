@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "module": "ES2022",
+    "target": "ES2022",
+    "moduleResolution": "node",
+    "outDir": "out/webview",
+    "sourceMap": true,
+    "strict": true
+  },
+  "include": ["src/webview/**/*"]
+}
