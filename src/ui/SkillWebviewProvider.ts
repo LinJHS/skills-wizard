@@ -102,7 +102,30 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                   await this._skillManager.updateSkillMetadata(importedId, { tags: data.tags });
                 }
             });
-            await this.refresh();
+            if (data.isSingle) {
+              vscode.window.showInformationMessage(`Skill "${data.skill.name}" imported successfully`);
+            }
+            await this.refreshAll();
+            break;
+        case 'batchImportSkills':
+            if (Array.isArray(data.items)) {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Importing ${data.items.length} Skills...`,
+                    cancellable: false
+                }, async () => {
+                    for (const item of data.items) {
+                        if (item.skill) {
+                            const importedId = await this._skillManager.importSkill(item.skill);
+                            if (Array.isArray(item.tags)) {
+                                await this._skillManager.updateSkillMetadata(importedId, { tags: item.tags });
+                            }
+                        }
+                    }
+                });
+                vscode.window.showInformationMessage(`Successfully imported ${data.items.length} skills`);
+            }
+            await this.refreshAll();
             break;
         case 'requestDeleteSkill': {
             const res = await vscode.window.showWarningMessage(
@@ -112,7 +135,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             );
             if (res === 'Delete') {
               await this._skillManager.deleteSkill(data.id);
-              await this.refresh();
+            await this.refresh();
             }
             break;
         }
@@ -126,8 +149,9 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
               for (const id of data.ids) {
                 await this._skillManager.deleteSkill(id);
               }
+              vscode.window.showInformationMessage(`Deleted ${data.ids.length} skills`);
             }
-            await this.refresh();
+            await this.refreshAll();
             break;
         }
         case 'requestEditSkillTags': {
@@ -170,13 +194,13 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             break;
         case 'createPreset':
              try {
-              const newPreset: Preset = {
-                  id: Date.now().toString(),
-                  name: data.name,
-                  skillIds: []
-              };
-              await this._skillManager.savePreset(newPreset);
-              await this.refresh();
+             const newPreset: Preset = {
+                 id: Date.now().toString(),
+                 name: data.name,
+                 skillIds: []
+             };
+             await this._skillManager.savePreset(newPreset);
+             await this.refresh();
              } catch (e: any) {
                vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
              }
@@ -189,8 +213,8 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
                   skillIds: Array.isArray(data.skillIds) ? data.skillIds : []
               };
               await this._skillManager.savePreset(newPreset);
-              await this.refresh();
               vscode.window.showInformationMessage(`Preset "${data.name}" created with ${newPreset.skillIds.length} skills`);
+              await this.refreshAll();
              } catch (e: any) {
                vscode.window.showErrorMessage(e?.message || 'Failed to create preset');
              }
@@ -198,7 +222,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
         case 'updatePreset':
             try {
             await this._skillManager.savePreset(data.preset);
-            await this.refresh();
+              await this.refreshAll();
             } catch (e: any) {
               vscode.window.showErrorMessage(e?.message || 'Failed to update preset');
             }
@@ -234,7 +258,7 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
             break;
         case 'updateSkillMetadata':
             await this._skillManager.updateSkillMetadata(data.id, { tags: data.tags, customDescription: data.customDescription });
-            await this.refresh();
+            await this.refreshAll();
             break;
       }
     });
@@ -260,6 +284,13 @@ export class SkillWebviewProvider implements vscode.WebviewViewProvider {
           defaultExportPath,
           storagePath
       });
+  }
+
+  // Refresh all views (call this when data changes globally)
+  public async refreshAll() {
+    await this.refresh();
+    // Notify extension to refresh all other providers
+    vscode.commands.executeCommand('skills-wizard.refresh');
   }
 
   private _getHtmlForWebview(webview: vscode.Webview, viewType: string) {
