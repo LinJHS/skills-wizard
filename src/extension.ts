@@ -52,10 +52,19 @@ export async function activate(context: vscode.ExtensionContext) {
 			clearTimeout(updateTimeout);
 		}
 		updateTimeout = setTimeout(async () => {
+			console.log('[Extension] File watcher triggered, starting synchronization...');
+			
+			// First, synchronize skill IDs (handle MD5 changes from external edits)
+			const hadMigrations = await skillManager.synchronizeSkillIds();
+			console.log(`[Extension] Synchronization complete, had migrations: ${hadMigrations}`);
+			
+			// Then refresh the views
+			console.log('[Extension] Refreshing views...');
 			await Promise.all([
 				mySkillsProvider.loadSkills(),
 				presetsProvider.loadPresets()
 			]);
+			console.log('[Extension] Views refreshed');
 		}, 500);
 	};
 	

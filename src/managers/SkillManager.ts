@@ -264,6 +264,7 @@ export class SkillManager {
    * Updates folder name, config, and preset references.
    */
   private async migrateSkillId(oldId: string, newId: string): Promise<void> {
+    console.log(`[SkillManager] Starting migration: ${oldId} -> ${newId}`);
     await this.configService.ensureReady();
     const skillsPath = this.configService.getSkillsPath();
     
@@ -272,7 +273,11 @@ export class SkillManager {
     
     // Rename folder
     if (await fs.pathExists(oldPath)) {
+      console.log(`[SkillManager] Renaming folder: ${oldPath} -> ${newPath}`);
       await fs.move(oldPath, newPath, { overwrite: true });
+      console.log('[SkillManager] Folder renamed successfully');
+    } else {
+      console.warn(`[SkillManager] Old path does not exist: ${oldPath}`);
     }
     
     // Update config and preset references
@@ -280,16 +285,78 @@ export class SkillManager {
     
     // Migrate skill metadata
     if (config.skills[oldId]) {
+      console.log(`[SkillManager] Migrating skill metadata from ${oldId} to ${newId}`);
       config.skills[newId] = config.skills[oldId];
       delete config.skills[oldId];
+    } else {
+      console.log(`[SkillManager] No metadata found for ${oldId}, creating empty entry for ${newId}`);
+      config.skills[newId] = { tags: [] };
     }
     
     // Update all preset references
+    const presetsBeforeMigration = JSON.stringify(config.presets);
     config.presets = (config.presets || []).map(p => ({
       ...p,
       skillIds: (p.skillIds || []).map(id => (id === oldId ? newId : id))
     }));
     
+    if (presetsBeforeMigration !== JSON.stringify(config.presets)) {
+      console.log(`[SkillManager] Updated preset references: ${oldId} -> ${newId}`);
+    }
+    
     await this.configService.saveConfig();
+    console.log('[SkillManager] Config saved successfully');
+  }
+
+  /**
+   * Check all skills for MD5 changes and migrate if necessary.
+   * This is called by the file watcher when SKILL.md files change.
+   */
+  public async synchronizeSkillIds(): Promise<boolean> {
+    await this.configService.ensureReady();
+    const skillsPath = this.configService.getSkillsPath();
+    
+    if (!await fs.pathExists(skillsPath)) {
+      return false;
+    }
+
+    let hasMigrations = false;
+    
+    // Get a fresh list of directories before processing
+    let entries = await fs.readdir(skillsPath, { withFileTypes: true });
+    
+    // Process all migrations
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      
+      const skillPath = path.join(skillsPath, entry.name);
+      const skillMdPath = path.join(skillPath, 'SKILL.md');
+      
+      if (!await fs.pathExists(skillMdPath)) {
+        continue;
+      }
+      
+      // Calculate current MD5
+      const currentMd5 = await this.fileService.calculateMD5(skillMdPath);
+      const folderId = entry.name; // Current folder name (should be old MD5)
+      
+      // If MD5 changed (folder name != current MD5), migrate
+      if (folderId !== currentMd5) {
+        console.log(`[SkillManager] Detected MD5 change: ${folderId} -> ${currentMd5}`);
+        await this.migrateSkillId(folderId, currentMd5);
+        hasMigrations = true;
+        console.log(`[SkillManager] Migration completed for ${folderId}`);
+      }
+    }
+    
+    // If we had migrations, wait a bit to ensure file system operations are complete
+    if (hasMigrations) {
+      console.log('[SkillManager] Waiting for file system to settle after migrations...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return hasMigrations;
   }
 }

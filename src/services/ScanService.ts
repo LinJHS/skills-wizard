@@ -142,11 +142,15 @@ export class ScanService {
     const config = this.configService.getConfig();
     const internalSkillsDir = this.configService.getSkillsPath();
     
+    console.log(`[ScanService] Loading imported skills from: ${internalSkillsDir}`);
+    
     const validSkillIds = new Set<string>();
     let configChanged = false;
     
     if (await fs.pathExists(internalSkillsDir)) {
       const entries = await fs.readdir(internalSkillsDir, { withFileTypes: true });
+      console.log(`[ScanService] Found ${entries.filter(e => e.isDirectory()).length} directories`);
+      
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const skillPath = path.join(internalSkillsDir, entry.name);
@@ -154,6 +158,7 @@ export class ScanService {
           if (await fs.pathExists(skillMdPath)) {
             try {
               const md5 = await this.fileService.calculateMD5(skillMdPath);
+              console.log(`[ScanService] Processing skill: folder=${entry.name}, md5=${md5}`);
               validSkillIds.add(md5);
               
               // Ensure metadata exists in config
@@ -182,6 +187,7 @@ export class ScanService {
                 source: 'extension',
                 isImported: true
               });
+              console.log(`[ScanService] Added skill: ${displayName} (${md5})`);
             } catch (err) {
               // Skip invalid skills
               console.error(`Failed to load skill from ${skillPath}:`, err);
@@ -190,6 +196,9 @@ export class ScanService {
         }
       }
     }
+    
+    console.log(`[ScanService] Total imported skills: ${imported.length}`);
+    console.log(`[ScanService] Valid skill IDs: ${Array.from(validSkillIds).join(', ')}`);
     
     // Clean up orphaned config entries (skills in config but not in file system)
     for (const skillId of Object.keys(config.skills)) {
@@ -207,6 +216,7 @@ export class ScanService {
       skillIds: (p.skillIds || []).filter(id => validSkillIds.has(id))
     }));
     if (JSON.stringify(config.presets) !== originalPresets) {
+      console.log('[ScanService] Cleaned up orphaned skills from presets');
       configChanged = true;
     }
     

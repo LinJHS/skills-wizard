@@ -41,9 +41,23 @@ export class PresetsTreeProvider implements vscode.TreeDataProvider<PresetTreeIt
   }
   
   async loadPresets(): Promise<void> {
+    console.log('[PresetsTreeProvider] Loading presets...');
     this.presets = this.skillManager.getPresets();
+    console.log(`[PresetsTreeProvider] Loaded ${this.presets.length} presets`);
+    
     const { imported } = await this.skillManager.scanForSkills();
     this.allSkills = imported;
+    console.log(`[PresetsTreeProvider] Loaded ${imported.length} imported skills`);
+    
+    // Debug: print preset skill IDs and available skill IDs
+    for (const preset of this.presets) {
+      console.log(`[PresetsTreeProvider] Preset "${preset.name}" has skill IDs: ${preset.skillIds.join(', ')}`);
+      const availableSkills = preset.skillIds
+        .map(id => this.allSkills.find(s => s.id === id))
+        .filter(s => s !== undefined);
+      console.log(`[PresetsTreeProvider] Found ${availableSkills.length}/${preset.skillIds.length} skills for preset "${preset.name}"`);
+    }
+    
     this.refresh();
   }
   
