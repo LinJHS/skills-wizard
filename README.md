@@ -8,6 +8,7 @@
 
 Developed by [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com/LinJHS)
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/PKrJtqTxgT)
 [![Version](https://img.shields.io/visual-studio-marketplace/v/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
 [![License](https://img.shields.io/github/license/LinJHS/skills-wizard?style=flat-square)](LICENSE)
@@ -75,6 +76,11 @@ The extension scans and manages skills from these common locations:
 ## Progress
 
 2026-01-18: Implemented the first basic version of the file system.
+
+## 💬 Community
+
+- [Discord](https://discord.gg/PKrJtqTxgT)
+- QQ Group: 1081092390
 
 ## 🤝 Contributing
 

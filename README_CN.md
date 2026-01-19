@@ -8,6 +8,7 @@
 
 开发者: [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com/LinJHS)
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/PKrJtqTxgT)
 [![Version](https://img.shields.io/visual-studio-marketplace/v/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
 [![License](https://img.shields.io/github/license/LinJHS/skills-wizard?style=flat-square)](LICENSE)
@@ -75,6 +76,11 @@
 ## 进展
 
 2026-01-18: 使用官方套件搭建起了第一个基础文件系统。
+
+## 💬 社区
+
+- [Discord](https://discord.gg/PKrJtqTxgT)
+- QQ群：1081092390
 
 ## 🤝 贡献
 
