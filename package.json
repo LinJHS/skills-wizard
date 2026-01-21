@@ -30,6 +30,9 @@
   "engines": {
     "vscode": "^1.100.1"
   },
+  "properties": {
+    "targetPlatform": "universal"
+  },
   "categories": [
     "AI",
     "Chat",
