@@ -28,7 +28,7 @@
   "icon": "resources/icon.png",
   "pricing": "Free",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.100.1"
   },
   "categories": [
     "AI",
