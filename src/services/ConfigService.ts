@@ -61,6 +61,8 @@ export class ConfigService {
       await this.maybeMigrateFrom(migrateFromPath);
     }
     await this.loadConfig();
+    // Validate and fix corrupted config
+    await this.validateAndFixConfig();
   }
 
   /**
@@ -77,23 +79,85 @@ export class ConfigService {
     const toConfig = this.configPath;
     const toSkillsDir = path.join(this.storagePath, 'skills');
 
-    const toHasConfig = await fs.pathExists(toConfig);
+    // Check if target has valid data (not just file existence)
+    const toHasValidConfig = await this.hasValidConfig(toConfig);
     const toHasSkills = await fs.pathExists(toSkillsDir) && (await fs.readdir(toSkillsDir)).length > 0;
-    if (toHasConfig || toHasSkills) {
+    
+    // Only skip migration if target has valid config OR valid skills
+    if (toHasValidConfig || toHasSkills) {
+      console.log(`[ConfigService] Skipping migration: target has valid data (config: ${toHasValidConfig}, skills: ${toHasSkills})`);
       return;
     }
 
     const fromHasConfig = await fs.pathExists(fromConfig);
     const fromHasSkills = await fs.pathExists(fromSkillsDir) && (await fs.readdir(fromSkillsDir)).length > 0;
     if (!fromHasConfig && !fromHasSkills) {
+      console.log('[ConfigService] No data to migrate from source');
       return;
     }
 
     try {
+      console.log(`[ConfigService] Migrating data from ${fromPath} to ${this.storagePath}`);
       await fs.ensureDir(this.storagePath);
       await fs.copy(fromPath, this.storagePath, { overwrite: false, errorOnExist: false });
+      console.log('[ConfigService] Migration completed successfully');
     } catch (e) {
-      console.error('Failed to migrate storage', e);
+      console.error('[ConfigService] Failed to migrate storage', e);
+    }
+  }
+
+  /**
+   * Check if a config file exists and contains valid data.
+   */
+  private async hasValidConfig(configPath: string): Promise<boolean> {
+    try {
+      if (!await fs.pathExists(configPath)) {
+        return false;
+      }
+      const config = await fs.readJSON(configPath);
+      // Consider config valid if it has any meaningful data
+      return config && (
+        (config.skills && Object.keys(config.skills).length > 0) ||
+        (config.presets && config.presets.length > 0) ||
+        (config.defaultExportPath && config.defaultExportPath.length > 0)
+      );
+    } catch (e) {
+      // If we can't read or parse the config, it's not valid
+      console.warn(`[ConfigService] Config file at ${configPath} is invalid:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Validate config and fix any corruption issues.
+   */
+  private async validateAndFixConfig(): Promise<void> {
+    // Ensure config has required structure
+    if (!this.config.skills) {
+      this.config.skills = {};
+    }
+    if (!this.config.presets) {
+      this.config.presets = [];
+    }
+    if (!this.config.defaultExportPath) {
+      this.config.defaultExportPath = '';
+    }
+    
+    // Save if we had to fix the structure
+    if (await fs.pathExists(this.configPath)) {
+      try {
+        const fileConfig = await fs.readJSON(this.configPath);
+        if (!fileConfig.skills || !fileConfig.presets) {
+          console.log('[ConfigService] Fixing corrupted config file');
+          await this.saveConfig();
+        }
+      } catch (e) {
+        console.error('[ConfigService] Config file is corrupted, reinitializing:', e);
+        await this.saveConfig();
+      }
+    } else {
+      // No config file exists, create initial one
+      await this.saveConfig();
     }
   }
 
@@ -101,13 +165,18 @@ export class ConfigService {
    * Load configuration from disk.
    */
   private async loadConfig(): Promise<void> {
+    console.log(`[ConfigService] Loading config from: ${this.configPath}`);
     if (await fs.pathExists(this.configPath)) {
       try {
         const stored = await fs.readJSON(this.configPath);
         this.config = { ...this.config, ...stored };
+        console.log(`[ConfigService] Config loaded successfully: ${Object.keys(stored.skills || {}).length} skills, ${(stored.presets || []).length} presets`);
       } catch (e) {
-        console.error('Failed to load config', e);
+        console.error('[ConfigService] Failed to load config, will use default:', e);
+        // Keep default config initialized in constructor
       }
+    } else {
+      console.log('[ConfigService] No config file found, will create new one');
     }
   }
 
