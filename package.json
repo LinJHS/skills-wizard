@@ -112,7 +112,7 @@
       {
         "command": "skillsWizard.scan",
         "title": "Scan for Skills",
-        "icon": "$(search)",
+        "icon": "$(sync)",
         "category": "Skills Wizard"
       },
       {
@@ -135,19 +135,19 @@
       },
       {
         "command": "skillsWizard.importSkill",
-        "title": "Import Skill",
-        "icon": "$(cloud-download)",
+        "title": "Import",
+        "icon": "$(add)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.importAllSkills",
-        "title": "Import All Skills",
-        "icon": "$(cloud-download)",
+        "title": "Import All",
+        "icon": "$(add)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.openSkill",
-        "title": "Open Skill File",
+        "title": "Open File",
         "icon": "$(go-to-file)",
         "category": "Skills Wizard"
       },
@@ -159,7 +159,7 @@
       },
       {
         "command": "skillsWizard.openSkillDir",
-        "title": "Open Skill Directory",
+        "title": "Open Directory",
         "icon": "$(folder-opened)",
         "category": "Skills Wizard"
       },
@@ -177,19 +177,19 @@
       },
       {
         "command": "skillsWizard.editSkillName",
-        "title": "Edit Skill Name",
+        "title": "Edit Name",
         "icon": "$(edit)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.editSkillDescription",
-        "title": "Edit Skill Description",
+        "title": "Edit Description",
         "icon": "$(note)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.deleteSkill",
-        "title": "Delete Skill",
+        "title": "Delete",
         "icon": "$(trash)",
         "category": "Skills Wizard"
       },
@@ -201,13 +201,13 @@
       },
       {
         "command": "skillsWizard.exportSkillsZip",
-        "title": "Export Skills to Zip",
+        "title": "Export All to Zip",
         "icon": "$(export)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.exportSkillZip",
-        "title": "Export Skill to Zip",
+        "title": "Export to Zip",
         "icon": "$(file-zip)",
         "category": "Skills Wizard"
       },
@@ -224,50 +224,62 @@
         "category": "Skills Wizard"
       },
       {
-        "command": "skillsWizard.updateDefaultExportPath",
-        "title": "Update Default Export Path",
+        "command": "skillsWizard.updateDefaultApplyPath",
+        "title": "Update Default Apply Path",
         "icon": "$(folder)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.batchImportSkills",
-        "title": "Batch Import Skills",
-        "icon": "$(cloud-download)",
+        "title": "Import Multiple...",
+        "icon": "$(add)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.batchDeleteSkills",
-        "title": "Batch Delete Skills",
+        "title": "Delete Multiple...",
         "icon": "$(trash)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.batchExportSkills",
-        "title": "Batch Export Skills",
+        "title": "Export Multiple...",
         "icon": "$(export)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.selectAllSkills",
-        "title": "Select All Skills",
+        "title": "Select All",
         "icon": "$(checklist)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.batchDeletePresets",
-        "title": "Batch Delete Presets",
+        "title": "Delete Multiple...",
         "icon": "$(trash)",
         "category": "Skills Wizard"
       },
       {
         "command": "skillsWizard.batchExportPresets",
-        "title": "Batch Export Presets",
+        "title": "Export Multiple...",
         "icon": "$(export)",
         "category": "Skills Wizard"
       },
       {
+        "command": "skillsWizard.searchImportSkills",
+        "title": "Search",
+        "icon": "$(search)",
+        "category": "Skills Wizard"
+      },
+      {
+        "command": "skillsWizard.clearImportSkillsSearch",
+        "title": "Clear Import Search",
+        "icon": "$(clear-all)",
+        "category": "Skills Wizard"
+      },
+      {
         "command": "skillsWizard.searchSkills",
-        "title": "Search Skills",
+        "title": "Search",
         "icon": "$(search)",
         "category": "Skills Wizard"
       },
@@ -297,7 +309,7 @@
       },
       {
         "command": "skillsWizard.createPresetFromSelection",
-        "title": "Create Preset from Multiple Skills",
+        "title": "Create Preset from Multiple...",
         "icon": "$(add)",
         "category": "Skills Wizard"
       },
@@ -327,7 +339,7 @@
       },
       {
         "command": "skillsWizard.addSkillsToPreset",
-        "title": "Add Skills to Preset",
+        "title": "Add to Preset...",
         "icon": "$(add)",
         "category": "Skills Wizard"
       },
@@ -380,6 +392,16 @@
           "command": "skillsWizard.batchImportSkills",
           "when": "view == skillsWizard.importView",
           "group": "2_actions@2"
+        },
+        {
+          "command": "skillsWizard.searchImportSkills",
+          "when": "view == skillsWizard.importView",
+          "group": "navigation"
+        },
+        {
+          "command": "skillsWizard.clearImportSkillsSearch",
+          "when": "view == skillsWizard.importView",
+          "group": "navigation"
         },
         {
           "command": "skillsWizard.searchSkills",
@@ -573,10 +595,10 @@
           "default": "",
           "description": "Custom storage path for Skills Wizard data (skills/, config.json). Leave empty to use the default profile-level path."
         },
-        "skillsWizard.defaultExportPath": {
+        "skillsWizard.defaultApplyPath": {
           "type": "string",
-          "default": ".claude/skills/",
-          "description": "Default path to export skills to in the workspace."
+          "default": "",
+          "description": "Default path to apply skills to in the workspace. You can customize this based on your IDE (e.g. .claude/skills/, .cursor/skills/, .copilot/skills/, etc.). You will be prompted to set this when applying skills for the first time."
         }
       }
     }

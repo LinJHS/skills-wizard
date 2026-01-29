@@ -49,7 +49,7 @@ You can customize the extension behavior in VS Code settings:
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `skillsWizard.defaultExportPath` | `.claude/skills/` | The default directory where skills will be exported in your workspace. |
+| `skillsWizard.defaultApplyPath` | `(empty)` | The default directory where skills will be applied in your workspace. You will be prompted to set this when applying skills for the first time. Can be customized based on your IDE (e.g., `.claude/skills/`, `.cursor/skills/`, `.copilot/skills/`). |
 | `skillsWizard.storagePath` | `(empty)` | Custom path for Skills Wizard data storage. Leave empty to use default. |
 
 ## 📂 Supported Paths
@@ -58,6 +58,7 @@ The extension scans and manages skills from these common locations:
 
 **Global:**
 - `~/.claude/skills/`
+- `~/.claude/plugins/marketplaces/*/plugins/*/skills/` (Claude Plugins from [claude-plugins.dev](https://claude-plugins.dev/))
 - `~/.copilot/skills/`
 - `~/.cursor/skills/`
 - `~/.gemini/antigravity/skills/`
@@ -75,7 +76,10 @@ The extension scans and manages skills from these common locations:
 
 ## Progress
 
+2026-01-29: Added Claude Plugins Marketplace support, skill source tracking (marketplace/github/local), Import Skills search, and streamlined UI with alphabetical sorting.
+
 2026-01-18: Implemented the first basic version of the file system.
+
 
 ## 💬 Community
 

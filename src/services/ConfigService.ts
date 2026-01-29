@@ -218,8 +218,8 @@ export class ConfigService {
   /**
    * Update the default export path setting.
    */
-  public updateDefaultExportPath(newPath: string): void {
-    vscode.workspace.getConfiguration('skillsWizard').update('defaultExportPath', newPath, vscode.ConfigurationTarget.Global);
+  public updateDefaultApplyPath(newPath: string): void {
+    vscode.workspace.getConfiguration('skillsWizard').update('defaultApplyPath', newPath, vscode.ConfigurationTarget.Global);
   }
 
   /**
@@ -230,9 +230,9 @@ export class ConfigService {
   }
 
   /**
-   * Get the default export path from settings.
+   * Get the default apply path from settings. Returns empty string if not set.
    */
-  public getDefaultExportPath(): string {
-    return vscode.workspace.getConfiguration('skillsWizard').get('defaultExportPath') || '.claude/skills/';
+  public getDefaultApplyPath(): string {
+    return vscode.workspace.getConfiguration('skillsWizard').get('defaultApplyPath') || '';
   }
 }

@@ -49,7 +49,7 @@
 
 | 设置项 | 默认值 | 说明 |
 | :--- | :--- | :--- |
-| `skillsWizard.defaultExportPath` | `.claude/skills/` | Skills 添加到工作区时的默认存放路径。 |
+| `skillsWizard.defaultApplyPath` | `(空)` | Skills 应用到工作区时的默认存放路径。首次应用时会提示设置。可根据使用的 IDE 自定义（如 `.claude/skills/`、`.cursor/skills/`、`.copilot/skills/` 等）。 |
 | `skillsWizard.storagePath` | `(空)` | 自定义 Skills Wizard 数据的存储路径。留空则使用默认配置路径。 |
 
 ## 📂 支持的路径
@@ -58,6 +58,7 @@
 
 **全局路径:**
 - `~/.claude/skills/`
+- `~/.claude/plugins/marketplaces/*/plugins/*/skills/`（来自 [claude-plugins.dev](https://claude-plugins.dev/) 的 Claude Plugins）
 - `~/.copilot/skills/`
 - `~/.cursor/skills/`
 - `~/.gemini/antigravity/skills/`
@@ -74,6 +75,8 @@
 - `.codex/skills/`
 
 ## 进展
+
+2026-01-29: 新增 Claude Plugins Marketplace 支持、技能来源追踪（marketplace/github/local）、导入技能搜索功能，并优化界面为字母排序。
 
 2026-01-18: 使用官方套件搭建起了第一个基础文件系统。
 

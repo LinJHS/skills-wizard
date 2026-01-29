@@ -40,6 +40,10 @@ export const GLOBAL_SKILL_PATHS = [
   '~/AppData/Roaming/alacritty/', // Example of standard location usage, though doubtful for skills
 ];
 
+// Claude plugins from marketplace (requires deep scanning)
+// Path structure: ~/.claude/plugins/marketplaces/{marketplace}/plugins/{plugin}/skills/{skill}/SKILL.md
+export const CLAUDE_PLUGINS_BASE_PATH = '~/.claude/plugins/marketplaces/';
+
 export const WORKSPACE_SKILL_PATHS = [
   '.claude/skills/',
   '.github/skills/',

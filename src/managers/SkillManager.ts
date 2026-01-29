@@ -174,8 +174,8 @@ export class SkillManager {
   /**
    * Update the default export path.
    */
-  public updateDefaultExportPath(newPath: string): void {
-    this.configService.updateDefaultExportPath(newPath);
+  public updateDefaultApplyPath(newPath: string): void {
+    this.configService.updateDefaultApplyPath(newPath);
   }
 
   /**

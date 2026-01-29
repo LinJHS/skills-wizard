@@ -24,7 +24,8 @@ export class SkillTreeItemFactory {
     
     item.tooltip = new vscode.MarkdownString(
       `**${skill.name}**\n\n${skill.description || 'No description'}\n\n` +
-      `${skill.tags?.length ? `Tags: ${skill.tags.join(', ')}` : ''}`
+      `${skill.tags?.length ? `Tags: ${skill.tags.join(', ')}\n\n` : ''}` +
+      `Source: ${skill.source}`
     );
     
     item.iconPath = new vscode.ThemeIcon('file-code');
@@ -81,6 +82,19 @@ export class SkillTreeItemFactory {
     };
     items.push(tagsItem);
     
+    // Source item
+    const sourceItem = new vscode.TreeItem(
+      `Source: ${skill.source}`,
+      vscode.TreeItemCollapsibleState.None
+    );
+    sourceItem.iconPath = new vscode.ThemeIcon(
+      skill.source === 'marketplace' ? 'package' : 
+      skill.source === 'github' ? 'github' : 
+      'folder'
+    );
+    sourceItem.contextValue = contextPrefix ? `${contextPrefix}SkillSource` : 'skillSource';
+    items.push(sourceItem);
+    
     // Open SKILL.md item
     const skillMdItem = new vscode.TreeItem(
       'Open SKILL.md',
@@ -94,7 +108,7 @@ export class SkillTreeItemFactory {
       arguments: [{
         id: skill.id, 
         path: skill.path, 
-        isRemote: skill.source === 'global',
+        isRemote: skill.source === 'github',
         name: skill.name
       }]
     };
@@ -113,7 +127,7 @@ export class SkillTreeItemFactory {
       arguments: [{
         id: skill.id, 
         path: skill.path, 
-        isRemote: skill.source === 'global',
+        isRemote: skill.source === 'github',
         name: skill.name
       }]
     };
