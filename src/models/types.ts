@@ -1,3 +1,5 @@
+export type SkillSource = 'marketplace' | 'github' | 'local';
+
 export interface Skill {
   id: string; // Unique identifier (usually md5 of SKILL.md)
   name: string;
@@ -5,7 +7,7 @@ export interface Skill {
   description?: string;
   tags: string[];
   md5: string;
-  source: 'workspace' | 'global' | 'extension'; // Where this skill was found/stored
+  source: SkillSource; // 'marketplace' | 'github' | 'local'
   isImported: boolean; // If it's saved in the extension's storage
 }
 
@@ -26,6 +28,7 @@ export interface SkillMetadata {
   tags: string[];
   customName?: string;
   customDescription?: string;
+  source?: SkillSource; // 'marketplace' | 'github' | 'local'
 }
 
 export interface DiscoveredSkill {
@@ -34,6 +37,7 @@ export interface DiscoveredSkill {
   md5: string;
   description?: string;
   sourceLocation: string; // e.g. "~/.claude/skills/"
-  isRemote?: boolean; // true if from GitHub
+  source: SkillSource; // 'marketplace' | 'github' | 'local'
+  isRemote?: boolean; // true if from GitHub (deprecated, use source instead)
   remoteUrl?: string; // GitHub API URL for the directory
 }

@@ -76,7 +76,10 @@ export class ImportExportService {
     // Ensure metadata exists for the imported skill
     const config = this.configService.getConfig();
     if (!config.skills[importedMd5]) {
-      config.skills[importedMd5] = { tags: [] };
+      config.skills[importedMd5] = { tags: [], source: skill.source };
+    } else if (!config.skills[importedMd5].source) {
+      // Update existing entry to include source if missing
+      config.skills[importedMd5].source = skill.source;
     }
 
     await this.configService.saveConfig();
@@ -373,7 +376,10 @@ export class ImportExportService {
     if (!rootPath) {
       return; // User cancelled
     }
-    const relativeTarget = this.configService.getDefaultExportPath();
+    const relativeTarget = await this.getOrPromptApplyPath();
+    if (!relativeTarget) {
+      return; // User cancelled
+    }
     const targetDir = path.join(rootPath, relativeTarget, skill.name);
     
     await fs.ensureDir(path.dirname(targetDir));
@@ -398,7 +404,10 @@ export class ImportExportService {
     if (!rootPath) {
       return; // User cancelled
     }
-    const relativeTarget = this.configService.getDefaultExportPath();
+    const relativeTarget = await this.getOrPromptApplyPath();
+    if (!relativeTarget) {
+      return; // User cancelled
+    }
     const targetBase = path.join(rootPath, relativeTarget);
     
     if (mode === 'replace') {
@@ -411,6 +420,37 @@ export class ImportExportService {
       const targetDir = path.join(targetBase, skill.name);
       await fs.copy(skill.path, targetDir, { overwrite: true });
     }
+  }
+
+  /**
+   * Get the default apply path, or prompt user to set it if not configured.
+   */
+  private async getOrPromptApplyPath(): Promise<string | undefined> {
+    let applyPath = this.configService.getDefaultApplyPath();
+    
+    if (!applyPath || applyPath.trim().length === 0) {
+      // Not set, prompt user to input
+      const input = await vscode.window.showInputBox({
+        prompt: 'Enter the default path to apply skills to in the workspace (relative to workspace root)',
+        placeHolder: '.claude/skills/',
+        validateInput: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'Path cannot be empty';
+          }
+          return null;
+        }
+      });
+      
+      if (!input) {
+        return undefined; // User cancelled
+      }
+      
+      // Save it persistently
+      this.configService.updateDefaultApplyPath(input.trim());
+      applyPath = input.trim();
+    }
+    
+    return applyPath;
   }
 
   /**

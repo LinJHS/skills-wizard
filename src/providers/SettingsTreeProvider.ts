@@ -18,7 +18,7 @@ export class SettingsTreeItem extends vscode.TreeItem {
       
       // Add command to edit setting
       this.command = {
-        command: settingKey === 'storagePath' ? 'skillsWizard.updateStoragePath' : 'skillsWizard.updateDefaultExportPath',
+        command: settingKey === 'storagePath' ? 'skillsWizard.updateStoragePath' : 'skillsWizard.updateDefaultApplyPath',
         title: 'Edit Setting',
         arguments: []
       };
@@ -45,7 +45,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<SettingsTre
       // Root level: show all settings
       const storagePath = await this.skillManager.getEffectiveStoragePath();
       const config = vscode.workspace.getConfiguration('skillsWizard');
-      const defaultExportPath = config.get<string>('defaultExportPath') || '.claude/skills/';
+      const defaultApplyPath = config.get<string>('defaultApplyPath') || '(not set)';
       
       return [
         new SettingsTreeItem(
@@ -55,10 +55,10 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<SettingsTre
           storagePath
         ),
         new SettingsTreeItem(
-          'Default Export Path',
+          'Default Apply Path',
           vscode.TreeItemCollapsibleState.None,
-          'defaultExportPath',
-          defaultExportPath
+          'defaultApplyPath',
+          defaultApplyPath
         )
       ];
     }

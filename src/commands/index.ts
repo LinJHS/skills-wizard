@@ -1175,14 +1175,15 @@ export function registerCommands(
     })
   );
   
-  // Update default export path
+  // Update default apply path
   context.subscriptions.push(
-    vscode.commands.registerCommand('skillsWizard.updateDefaultExportPath', async () => {
+    vscode.commands.registerCommand('skillsWizard.updateDefaultApplyPath', async () => {
       const config = vscode.workspace.getConfiguration('skillsWizard');
-      const currentPath = config.get<string>('defaultExportPath') || '.claude/skills/';
+      const currentPath = config.get<string>('defaultApplyPath') || '';
       
       const input = await vscode.window.showInputBox({
-        prompt: 'Enter default export path (relative to workspace root)',
+        prompt: 'Enter default apply path (relative to workspace root)',
+        placeHolder: '.claude/skills/',
         value: currentPath,
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
@@ -1193,8 +1194,8 @@ export function registerCommands(
       });
       
       if (input !== undefined) {
-        await config.update('defaultExportPath', input, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage('Default export path updated');
+        await config.update('defaultApplyPath', input, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage('Default apply path updated');
         settingsProvider.refresh();
       }
     })
@@ -1556,6 +1557,31 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('skillsWizard.clearSkillsSearch', () => {
       mySkillsProvider.setSearchQuery('');
+      vscode.window.showInformationMessage('Search cleared');
+    })
+  );
+  
+  // Search import skills
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.searchImportSkills', async () => {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Search skills by name or description',
+        placeHolder: 'Enter search term...'
+      });
+      
+      if (query !== undefined) {
+        importProvider.setSearchQuery(query);
+        if (query) {
+          vscode.window.showInformationMessage(`Searching for: "${query}"`);
+        }
+      }
+    })
+  );
+  
+  // Clear import skills search
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skillsWizard.clearImportSkillsSearch', () => {
+      importProvider.setSearchQuery('');
       vscode.window.showInformationMessage('Search cleared');
     })
   );

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs-extra';
-import { DiscoveredSkill } from '../models/types';
+import { DiscoveredSkill, SkillSource } from '../models/types';
 import { WORKSPACE_SKILL_PATHS, GITHUB_EXTRA_SKILL_PATHS } from '../utils/paths';
 import { FileService } from './FileService';
 
@@ -161,6 +161,7 @@ export class GitHubService {
         md5,
         description,
         sourceLocation: repoUrl,
+        source: 'github',
         isRemote: true,
         remoteUrl: dirApiUrl,
       });
@@ -214,6 +215,7 @@ export class GitHubService {
                       md5: md5,
                       description,
                       sourceLocation: repoUrl,
+                      source: 'github',
                       isRemote: true,
                       remoteUrl: dirApiUrl
                     });

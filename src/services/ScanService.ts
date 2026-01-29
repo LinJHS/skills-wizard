@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { DiscoveredSkill, Skill, SkillMetadata } from '../models/types';
-import { GLOBAL_SKILL_PATHS, WORKSPACE_SKILL_PATHS, resolvePath } from '../utils/paths';
+import { DiscoveredSkill, Skill, SkillMetadata, SkillSource } from '../models/types';
+import { GLOBAL_SKILL_PATHS, WORKSPACE_SKILL_PATHS, CLAUDE_PLUGINS_BASE_PATH, resolvePath } from '../utils/paths';
 import { FileService } from './FileService';
 import { ConfigService } from './ConfigService';
 
@@ -63,7 +63,8 @@ export class ScanService {
                   path: skillPath,
                   md5: md5,
                   description,
-                  sourceLocation: resolvedBase
+                  sourceLocation: resolvedBase,
+                  source: 'local'
                 });
               }
             }
@@ -73,6 +74,10 @@ export class ScanService {
         }
       }
     }
+    
+    // 1.5. Scan Claude Plugins from Marketplace
+    // Path structure: ~/.claude/plugins/marketplaces/{marketplace}/plugins/{plugin}/skills/{skill}/SKILL.md
+    await this.scanClaudePluginsMarketplace(discovered, normalizedStoragePath);
 
     // 2. Scan Workspace Paths (excluding our own storage directory)
     if (vscode.workspace.workspaceFolders) {
@@ -102,7 +107,8 @@ export class ScanService {
                       path: skillPath,
                       md5: md5,
                       description,
-                      sourceLocation: workspaceBase
+                      sourceLocation: workspaceBase,
+                      source: 'local'
                     });
                   }
                 }
@@ -184,7 +190,7 @@ export class ScanService {
                 description: fileDescription || meta.customDescription,
                 tags: meta.tags || [],
                 md5: md5,
-                source: 'extension',
+                source: meta.source || 'local',
                 isImported: true
               });
               console.log(`[ScanService] Added skill: ${displayName} (${md5})`);
@@ -256,7 +262,8 @@ export class ScanService {
         path: skillPath,
         md5: md5,
         description,
-        sourceLocation: path.dirname(skillPath)
+        sourceLocation: path.dirname(skillPath),
+        source: 'local'
       });
     }
     
@@ -340,6 +347,84 @@ export class ScanService {
     }
     config.skills[skillId] = { ...config.skills[skillId], ...metadata };
     await this.configService.saveConfig();
+  }
+
+  /**
+   * Scan Claude plugins from marketplace.
+   * Path structure: ~/.claude/plugins/marketplaces/{marketplace}/plugins/{plugin}/skills/{skill}/SKILL.md
+   */
+  private async scanClaudePluginsMarketplace(discovered: DiscoveredSkill[], normalizedStoragePath: string): Promise<void> {
+    const pluginsBase = resolvePath(CLAUDE_PLUGINS_BASE_PATH);
+    
+    if (!await fs.pathExists(pluginsBase)) {
+      return;
+    }
+    
+    try {
+      // Iterate through marketplaces
+      const marketplaces = await fs.readdir(pluginsBase, { withFileTypes: true });
+      for (const marketplace of marketplaces) {
+        if (!marketplace.isDirectory()) {
+          continue;
+        }
+        
+        const marketplacePath = path.join(pluginsBase, marketplace.name);
+        const pluginsDir = path.join(marketplacePath, 'plugins');
+        
+        if (!await fs.pathExists(pluginsDir)) {
+          continue;
+        }
+        
+        // Iterate through plugins in this marketplace
+        const plugins = await fs.readdir(pluginsDir, { withFileTypes: true });
+        for (const plugin of plugins) {
+          if (!plugin.isDirectory()) {
+            continue;
+          }
+          
+          const pluginPath = path.join(pluginsDir, plugin.name);
+          const skillsDir = path.join(pluginPath, 'skills');
+          
+          if (!await fs.pathExists(skillsDir)) {
+            continue;
+          }
+          
+          // Iterate through skills in this plugin
+          const skills = await fs.readdir(skillsDir, { withFileTypes: true });
+          for (const skill of skills) {
+            if (!skill.isDirectory()) {
+              continue;
+            }
+            
+            const skillPath = path.join(skillsDir, skill.name);
+            const normalizedSkillPath = path.normalize(skillPath);
+            
+            // Skip if this is our storage directory
+            if (normalizedSkillPath === normalizedStoragePath || 
+                normalizedStoragePath.startsWith(normalizedSkillPath + path.sep)) {
+              continue;
+            }
+            
+            const skillMdPath = path.join(skillPath, 'SKILL.md');
+            if (await fs.pathExists(skillMdPath)) {
+              const md5 = await this.fileService.calculateMD5(skillMdPath);
+              const description = await this.fileService.readSkillDescriptionFromFile(skillMdPath);
+              discovered.push({
+                name: skill.name,
+                path: skillPath,
+                md5: md5,
+                description,
+                sourceLocation: skillsDir,
+                source: 'marketplace'
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Ignore access errors
+      console.error('Error scanning Claude plugins marketplace:', err);
+    }
   }
 
   /**

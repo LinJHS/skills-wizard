@@ -26,6 +26,7 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
   
   private scannedSkills: DiscoveredSkill[] = [];
   private importedMd5s: Set<string> = new Set();
+  private searchQuery: string = '';
   
   constructor(private readonly skillManager: SkillManager) {}
   
@@ -38,6 +39,21 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
     this.scannedSkills = allDiscovered || [];
     this.importedMd5s = new Set(imported.map(s => s.md5));
     this.refresh();
+  }
+  
+  setSearchQuery(query: string): void {
+    this.searchQuery = query.toLowerCase();
+    this.refresh();
+  }
+  
+  private filterSkills(skills: DiscoveredSkill[]): DiscoveredSkill[] {
+    if (!this.searchQuery) {
+      return skills;
+    }
+    return skills.filter(skill => 
+      skill.name.toLowerCase().includes(this.searchQuery) ||
+      (skill.description && skill.description.toLowerCase().includes(this.searchQuery))
+    );
   }
   
   getSkill(id: string): DiscoveredSkill | undefined {
@@ -56,7 +72,7 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
       description: discovered.description,
       tags: [],
       md5: discovered.md5,
-      source: discovered.isRemote ? 'global' : 'workspace',
+      source: discovered.source,
       isImported: false,
       originalDiscovered: discovered
     };
@@ -64,47 +80,15 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
   
   async getChildren(element?: ImportTreeItem | vscode.TreeItem): Promise<Array<ImportTreeItem | vscode.TreeItem>> {
     if (!element) {
-      // Root level: show categories
-      if (this.scannedSkills.length === 0) {
+      // Root level: show all skills directly (no folder grouping), sorted alphabetically
+      const filteredSkills = this.filterSkills(this.scannedSkills);
+      
+      if (filteredSkills.length === 0) {
         return [];
       }
       
-      // Group by source location
-      const grouped = new Map<string, DiscoveredSkill[]>();
-      
-      for (const skill of this.scannedSkills) {
-        const location = skill.isRemote ? 'GitHub' : skill.sourceLocation;
-        if (!grouped.has(location)) {
-          grouped.set(location, []);
-        }
-        grouped.get(location)!.push(skill);
-      }
-      
-      const items: ImportTreeItem[] = [];
-      
-      for (const [location, skills] of grouped) {
-        items.push(new ImportTreeItem(
-          `${location} (${skills.length})`,
-          vscode.TreeItemCollapsibleState.Collapsed,
-          undefined,
-          true
-        ));
-      }
-      
-      return items.sort((a, b) => a.label!.toString().localeCompare(b.label!.toString()));
-    } else if (element instanceof ImportTreeItem && element.isCategory) {
-      // Show skills in this category
-      const categoryLabel = element.label!.toString();
-      const locationMatch = categoryLabel.match(/^(.+?)\s*\(\d+\)$/);
-      const location = locationMatch ? locationMatch[1] : categoryLabel;
-      
-      const skills = this.scannedSkills.filter(s => {
-        const skillLocation = s.isRemote ? 'GitHub' : s.sourceLocation;
-        return skillLocation === location;
-      });
-      
       // Use shared factory to create skill items
-      return skills.map(discoveredSkill => {
+      const items = filteredSkills.map(discoveredSkill => {
         const skill = this.convertDiscoveredToSkill(discoveredSkill);
         const isImported = this.importedMd5s.has(discoveredSkill.md5);
         const item = SkillTreeItemFactory.createSkillItem(skill, 'import');
@@ -121,7 +105,10 @@ export class ImportTreeProvider implements vscode.TreeDataProvider<ImportTreeIte
           importItem.contextValue = 'importedSkill';
         }
         return Object.assign(importItem, item);
-      }).sort((a, b) => a.label!.toString().localeCompare(b.label!.toString()));
+      });
+      
+      // Sort alphabetically by name
+      return items.sort((a, b) => a.label!.toString().localeCompare(b.label!.toString()));
     } else if (element instanceof ImportTreeItem && element.skill && !element.isDetailItem) {
       // Show skill details using shared factory
       const skill = this.convertDiscoveredToSkill(element.skill);
