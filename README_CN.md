@@ -19,13 +19,15 @@
 
 ---
 
-**Skills Wizard** 是一款强大的 VS Code 插件，旨在帮助你管理、组织和分发各类代码助手（如 Claude, Cursor, Copilot 等）的 "Skills"（提示词库/能力包）。
+**Skills Wizard** 是一款强大的 VS Code 插件，旨在帮助你管理、组织和分发各类代码助手的 "Skills"（提示词库/能力包）。
+
+**全 IDE 支持**：完美兼容 Claude Code、Cursor、GitHub Copilot、Gemini Antigravity、OpenCode、Codex 等主流 AI 编程工具。不在列表中？没关系——自定义路径扫描让你可以添加任何 skill 目录。
 
 它可以将分散在不同位置的 Skills 集中管理，并允许你轻松地将它们注入到当前工作区中。
 
 ## ✨ 功能特性
 
-- 🕵️ **自动识别**: 自动扫描并识别来自全局和工作区路径的 Skills，全面支持 Claude, Cursor, Copilot 等。
+- 🕵️ **全 IDE 支持**: 自动识别 Claude Code、Cursor、Copilot、Antigravity、OpenCode、Codex 以及 Claude Plugins Marketplace 的 Skills。支持自定义路径扫描任意 IDE。
 - 📦 **一键导入/导出**: 轻松将 Skills 导入插件库，或将其导出到当前项目的指定目录。
 - 📚 **批量操作**: 支持批量导入、导出和删除 Skills，管理效率倍增。
 - 🤐 **压缩包支持**: 支持导入/导出 Zip 格式的 Skill 包，方便迁移和分享。

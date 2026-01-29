@@ -19,13 +19,15 @@ Developed by [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com
 
 ---
 
-**Skills Wizard** is a powerful VS Code extension designed to manage, organize, and distribute "Skills" (prompt libraries/capabilities) for various coding assistants like Claude, Cursor, Copilot, and more.
+**Skills Wizard** is a powerful VS Code extension designed to manage, organize, and distribute "Skills" (prompt libraries/capabilities) for various coding assistants.
+
+**Universal IDE Support**: Works seamlessly with Claude Code, Cursor, GitHub Copilot, Gemini Antigravity, OpenCode, Codex, and more. Don't see your IDE? No problem - custom path scanning lets you add any skill directory.
 
 It centralizes your scattered skills from different locations and allows you to easily inject them into your current workspace.
 
 ## ✨ Features
 
-- 🕵️ **Auto-Detection**: Automatically identifies skills from global and workspace paths, fully supporting Claude, Cursor, Copilot, and more.
+- 🕵️ **Universal IDE Support**: Automatically detects skills from Claude Code, Cursor, Copilot, Antigravity, OpenCode, Codex, and Claude Plugins Marketplace. Custom path scanning for any IDE.
 - 📦 **One-Click Import/Export**: Easily import skills into the extension or export them to your current project's workspace.
 - 📚 **Batch Operations**: Support batch import, export, and delete skills for higher efficiency.
 - 🤐 **Zip Support**: Import/Export skills as Zip bundles for easy migration and sharing.
