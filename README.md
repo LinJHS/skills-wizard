@@ -6,7 +6,7 @@
 
 **The Ultimate Skill Manager for Your Coding Assistants**
 
-Developed by [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com/LinJHS)
+Developed by [@rexera](https://github.com/rexera) & [@LinJHS](https://github.com/LinJHS) & [@MonticuleTech](https://github.com/MonticuleTech)
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/PKrJtqTxgT)
 [![Version](https://img.shields.io/visual-studio-marketplace/v/LinJHS.skills-wizard?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=LinJHS.skills-wizard)
